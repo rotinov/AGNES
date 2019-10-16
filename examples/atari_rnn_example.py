@@ -13,6 +13,6 @@ if __name__ == '__main__':
     # runner.log(agnes.TensorboardLogger(".logs/"+str(time.time())), agnes.log)
     # runner.run()
 
-    runner.worker.load("examples/distributed_rnn/Temporary_Breakout.pth")
+    runner.worker.load("examples/distributed_rnn/Breakout.pth")
 
     agnes.common.Visualize(runner.worker, env).run()

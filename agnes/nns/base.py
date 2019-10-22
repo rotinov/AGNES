@@ -19,6 +19,8 @@ class _BasePolicy(torch.nn.Module, abc.ABC):
 
     def __init__(self, observation_space: spaces.Space, action_space: spaces.Space):
         super(_BasePolicy, self).__init__()
+        torch.backends.cudnn.benchmark = True
+
         self.action_space = action_space
 
         if isinstance(action_space, spaces.Discrete):
@@ -39,6 +41,10 @@ class _BasePolicy(torch.nn.Module, abc.ABC):
     def forward(self, *args):
         pass
 
+    @abc.abstractmethod
+    def wrap_dist(self, *args):
+        pass
+
     def get_action(self, x, done):
         if self.is_discrete:
             return self._get_for_env(x, done)
@@ -51,7 +57,9 @@ class _BasePolicy(torch.nn.Module, abc.ABC):
         if x.ndimension() < len(self.action_space.shape) + 1:
             x.unsqueeze_(0)
 
-        dist, state_value = self.forward(x)
+        probs, state_value = self.forward(x)
+
+        dist = self.wrap_dist(probs)
 
         smpled = dist.sample()
 

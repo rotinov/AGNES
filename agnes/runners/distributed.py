@@ -24,7 +24,7 @@ class Distributed(BaseRunner):
     def __init__(self, env, algo, nn: _BaseChooser, config=None):
         super().__init__(env, algo, nn, config)
 
-        self.run_times = int(numpy.ceil(self.timesteps / self.nsteps))
+        self.run_times = int(numpy.floor(self.timesteps / self.nsteps)) + 1
 
         self.communication = MPI.COMM_WORLD
         self.rank = self.communication.Get_rank()

@@ -1,5 +1,5 @@
 import torch
-from abc import ABCMeta, abstractmethod
+import abc
 
 torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = True
@@ -20,12 +20,12 @@ class _BaseBuffer(object):
         pass
 
 
-class _BaseAlgo(metaclass=ABCMeta):
+class _BaseAlgo(abc.ABC):
     _nnet: torch.nn.Module
 
     meta = "BASE"
 
-    @abstractmethod
+    @abc.abstractmethod
     def __init__(self, *args):
         pass
 
@@ -66,7 +66,7 @@ class _BaseAlgo(metaclass=ABCMeta):
     def experience(self, transition):
         pass
 
-    def learn(self, data):
+    def train(self, data):
         pass
 
     def to(self, device):

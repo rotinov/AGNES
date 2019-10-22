@@ -33,20 +33,21 @@ class CNNDiscreteCopy(_CnnFamily):
 
         self.actor_head.conv.apply(get_weights_init('relu'))
 
-        self.actor_head.head.apply(get_weights_init(numpy.sqrt(0.01)))
-
         self.critic_head.conv.apply(get_weights_init('relu'))
 
-        self.critic_head.head.apply(get_weights_init(numpy.sqrt(0.01)))
+        self.actor_head[-1].apply(get_weights_init(0.01))
+        self.critic_head[-1].apply(get_weights_init(0.01))
+
+    def wrap_dist(self, policy):
+        dist = Categorical(logits=policy)
+        return dist
 
     def forward(self, x):
         state_value = self.critic_head(x)
 
         policy = self.actor_head(x)
 
-        dist = Categorical(logits=policy)
-
-        return dist, state_value
+        return policy, state_value
 
 
 class CNNDiscreteShared(_CnnFamily):
@@ -66,11 +67,14 @@ class CNNDiscreteShared(_CnnFamily):
         self.critic_head = make_nn.make_fc(self.hidden_size, 1)
         self.conv.apply(get_weights_init('relu'))
 
-        self.actor_head.apply(get_weights_init(numpy.sqrt(0.01)))
-
-        self.critic_head.apply(get_weights_init(numpy.sqrt(0.01)))
+        self.actor_head[-1].apply(get_weights_init(0.01))
+        self.critic_head[-1].apply(get_weights_init(0.01))
 
         self.apply(get_weights_init('relu'))
+
+    def wrap_dist(self, policy):
+        dist = Categorical(logits=policy)
+        return dist
 
     def forward(self, x):
         both = self.conv(x)
@@ -78,6 +82,4 @@ class CNNDiscreteShared(_CnnFamily):
         state_value = self.critic_head(both)
         policy = self.actor_head(both)
 
-        dist = Categorical(logits=policy)
-
-        return dist, state_value
+        return policy, state_value

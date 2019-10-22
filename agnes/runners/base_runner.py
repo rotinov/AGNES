@@ -13,6 +13,7 @@ import re
 class BaseRunner(abc.ABC):
     logger = logger.ListLogger()
     saver = Saver()
+    workers_num = 1
 
     def __init__(self, env, algo, nn: _BaseChooser, config: Dict):
         env, env_type, vec_num = env
@@ -32,7 +33,7 @@ class BaseRunner(abc.ABC):
         if self.is_trainer():
             self.logger = logger.ListLogger(args)
             self.logger.info({
-                "envs_num": self.vec_num,
+                "envs_num": self.vec_num * self.workers_num,
                 "device": self.trainer.device_info(),
                 "env_type": self.env_type,
                 "NN type": self.nn_name,

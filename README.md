@@ -19,6 +19,10 @@
 
 ![LSTMCNN agent plays Breakout](results/Atari-BreakoutNoFrameskip-v4-PPO-10M/Breakout-LSTMCNN.gif)
 
+*Grad-cam technique was used for sampled action chosen by trained LSTMCNN(previous point).*
+
+![LSTMCNN agent plays Breakout](results/Atari-BreakoutNoFrameskip-v4-PPO-10M/Breakout-LSTMCNN-Grad-Cam.gif)
+
 ## Runners
 #### Single
 
@@ -42,6 +46,8 @@ if __name__ == '__main__':
 
 
 #### Distributed
+
+Unlike in **Single** runner, in **Distributed** runner due to async executing, weights are delayed by one rollout but this has no effect on learning because weights are delayed only by one update as it is in **Single** runner. So all parameters like probabilities ratio stay the same.
 
 Runs with
 

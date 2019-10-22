@@ -32,12 +32,14 @@ class Single(BaseRunner):
         print(self.trainer.device_info(), 'will be used.')
         nbatch = self.nsteps * self.env.num_envs
 
+        self.worker.update(self.trainer)
+
         lr_things = []
 
         self.state = self.env.reset()
         self.done = numpy.zeros(self.env.num_envs, dtype=numpy.bool)
 
-        run_times = int(self.timesteps // self.nsteps)
+        run_times = int(numpy.ceil(self.timesteps / self.nsteps))
         epinfobuf = deque(maxlen=100 * log_interval)
         tfirststart = time.perf_counter()
 

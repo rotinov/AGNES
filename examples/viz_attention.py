@@ -21,6 +21,7 @@ class VisualizeAttention:
             for i in range(prerun):
                 t_state = torch.cuda.FloatTensor(self.state)
                 dist, self.hidden, value = self.nnet.forward(t_state, self.hidden)
+                dist = self.nnet.wrap_dist(dist)
                 action = dist.sample().detach().cpu().numpy()
                 self.state, done, _, _ = self.env.step(action)
                 if done.item():
@@ -65,6 +66,7 @@ class VisualizeAttention:
             t_state = torch.cuda.FloatTensor(self.state)
             dist, self.hidden, value = self.nnet.forward(t_state, self.hidden)
             self.hidden = (self.hidden[0].detach(), self.hidden[1].detach())
+            dist = self.nnet.wrap_dist(dist)
             action = dist.sample().detach()
             log_prob = dist.log_prob(action)
             loss = (torch.exp(log_prob) * 0.1).mean()

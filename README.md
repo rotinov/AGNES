@@ -1,19 +1,32 @@
 # AGNES - Flexible Reinforcement Learning Framework with PyTorch
 
-**Status:** This framework is under development and bugs may occur.
+**Status:** This framework is under active development and bugs may occur.
 
 [![Build status](https://travis-ci.org/rotinov/AGNES.svg?branch=master)](https://travis-ci.org/rotinov/AGNES)
 
 ## Results
+#### MuJoCo
 [![Peaking at 5362 at the end. The ending average is 5278.](results/MuJoCo-Ant-v2-PPO-1M/reward_per_update.svg?raw=true&sanitize=true)](results/MuJoCo-Ant-v2-PPO-1M)
-*MuJoCo "Ant-v2" training with 1M steps. "Single" runner with "PPO" algorithm, MLP NN and 32 number of envs.*
+*MuJoCo "Ant-v2" training with 1M steps. **Single** runner with **PPO** algorithm, **MLP** NN and 32 number of envs.*
 
-*You can get the Tensorboard log file by clicking the image below(You will be redirected to the destination GitHub folder). The default config for the MuJoCo environment was used.*
+*You can get the Tensorboard log file by clicking the image above(You will be redirected to the destination GitHub folder). The default config for the MuJoCo environment was used.*
+
+#### Atari
+[![Peaking at 861.8 at the end. The ending average is 854.8.](results/Atari-BreakoutNoFrameskip-v4-PPO-10M/reward_per_update.svg?raw=true&sanitize=true)](results/Atari-BreakoutNoFrameskip-v4-PPO-10M)
+*Atari "BreakoutNoFrameskip-v4" with frame stack training with 10M steps. **Distributed** runner with **PPO** algorithm, **LSTMCNN** and 16 number of envs.*
+
+*You can get the Tensorboard log file by clicking the image above(You will be redirected to the destination GitHub folder). The default config for the Atari environment was used.*
+
+![LSTMCNN agent plays Breakout](results/Atari-BreakoutNoFrameskip-v4-PPO-10M/Breakout-LSTMCNN.gif)
+
+*Grad-cam technique was used for sampled action chosen by trained LSTMCNN(previous point).*
+
+![LSTMCNN agent plays Breakout](results/Atari-BreakoutNoFrameskip-v4-PPO-10M/Breakout-LSTMCNN-Grad-Cam.gif)
 
 ## Runners
-* Single
+#### Single
 
-One worker and trainer. 'agnes.make_vec_env' can be used here.
+One worker and trainer. **agnes.make_vec_env** can also be used here.
 
 ```python
 import agnes
@@ -28,11 +41,13 @@ if __name__ == '__main__':
 
 ```
 
-'agnes.log' - object of StandardLogger class that outputs parameters to console.
-'agnes.TensorboardLogger' - class for writing logs in Tensorboard file.
+**agnes.log** - object of **StandardLogger** class that outputs parameters to console.
+**agnes.TensorboardLogger** - class for writing logs in Tensorboard file.
 
 
-* Distributed
+#### Distributed
+
+Unlike in **Single** runner, in **Distributed** runner due to async executing, weights are delayed by one rollout but this has no effect on learning because weights are delayed only by one update as it is in **Single** runner. So all parameters like probabilities ratio stay the same.
 
 Runs with
 
@@ -55,7 +70,7 @@ if __name__ == '__main__':
 ```
 
 ## Algorithms
-* PPO
+#### PPO
 Proximal Policy Optimization is implemented in this framework and can be used simply:
 ```python
 import agnes
@@ -69,29 +84,64 @@ if __name__ == '__main__':
 
 ## Neural Network Architectures
 
-* Multi Layer Perceptron
+#### Multi Layer Perceptron
 
-Can be used with both Continuous and Discrete action spaces.
+Can be used with both continuous and discrete action spaces.
 ```python
 ...
 runner = agnes.Single(env, agnes.PPO, agnes.MLP)
 ...
 ```
 
-* Convolutional Neural Network
+#### Convolutional Neural Network
 
-Can be used only with Discrete action spaces.
+Can be used only with discrete action spaces.
 ```python
 ...
 runner = agnes.Single(env, agnes.PPO, agnes.CNN)
 ...
 ```
 
-* Recurrent Neural Network
+#### Recurrent Neural Network
 
-Can be used only with Discrete action spaces.
+Can be used with both continuous and discrete action spaces.
 ```python
 ...
 runner = agnes.Single(env, agnes.PPO, agnes.RNN)
 ...
 ```
+
+#### Convolutional Recurrent Neural Network
+
+Can be used only with discrete action spaces.
+```python
+...
+runner = agnes.Single(env, agnes.PPO, agnes.RNNCNN)
+...
+```
+
+#### Convolutional Neural Network with last LSTM layer
+Can be used only with discrete action spaces.
+```python
+...
+runner = agnes.Single(env, agnes.PPO, agnes.LSTMCNN)
+...
+```
+
+## Make environment
+* **make_vec_env(env, envs_num**=ncpu, **config**=None)**
+
+    Parameters:
+    * **env**(str or function) is id of gym environment or function, that returns initialized environment
+    * **envs_num**(int) is a number of environments to initialize, by default is a number of logical cores on the CPU
+    * **config**(dict) is a dictionary with parameters for **Monitor** and for initializing environment, by default is None(uses default config)
+
+    Returns:
+    * tuple of
+        1. **envs**(**VecEnv** object)
+        2. **env_type**(str)
+        3. **envs_num**(int) is a number of envs in **VecEnv** object
+    
+    The whole tuple should be put in a **runner**.
+
+* **make_env(env, config=None)** is an alias of **make_vec_env** without **envs_num** argument that will be setted to 1.

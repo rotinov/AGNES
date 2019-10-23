@@ -11,9 +11,17 @@ from agnes.common.init_weights import get_weights_init
 
 class _RecurrentFamily(_BasePolicy):
     _hs = None
+
+    def __init__(self, observation_space: spaces.Space, action_space: spaces.Space):
+        super().__init__(observation_space, action_space)
+        torch.backends.cudnn.benchmark = False
     
     def forward(self, *args):
         return None, None, None
+
+    def wrap_dist(self, policy):
+        dist = Categorical(logits=policy)
+        return dist
 
     def get_action(self, x, dones):
         assert x.ndimension() == 1 + self.obs_space_n, "Only batches are supported"
@@ -22,7 +30,9 @@ class _RecurrentFamily(_BasePolicy):
             self._hs = self._hs.masked_fill(dones.unsqueeze(0).unsqueeze(-1).type(torch.BoolTensor), 0.0)
             hs = self._hs
 
-        dist, self._hs, state_value = self.forward(x, self._hs)
+        probs, self._hs, state_value = self.forward(x, self._hs)
+
+        dist = self.wrap_dist(probs)
 
         if hs is None:
             hs = torch.zeros_like(self._hs)
@@ -60,7 +70,8 @@ class RNNDiscrete(_RecurrentFamily):
         self.critic_head = make_nn.make_fc(self.hidden_size, 1, num_layers=1)
 
         self.apply(get_weights_init('tanh'))
-        self.critic_head.apply(get_weights_init(0.01))
+        self.actor_head[-1].apply(get_weights_init(0.01))
+        self.critic_head[-1].apply(get_weights_init(0.01))
 
     def get_val(self, x):
         rnn_out, _, _ = self.forward_body(x, self._hs)
@@ -79,9 +90,7 @@ class RNNDiscrete(_RecurrentFamily):
             probs = probs.view(shapes + (-1,))
             state_value = state_value.view(shapes + (-1,))
 
-        dist = Categorical(logits=probs)
-
-        return dist, hs, state_value
+        return probs, hs, state_value
 
     def forward_body(self, x, hs):
         shapes = None
@@ -126,6 +135,11 @@ class RNNContinuous(RNNDiscrete):
         self.actor_head.apply(get_weights_init(0.01))
         self.critic_head.apply(get_weights_init(0.01))
 
+    def wrap_dist(self, mu):
+        std = self.log_std.expand_as(mu).exp()
+        dist = Normal(mu, std)
+        return dist
+
     def forward(self, x, hs):
         rnn_out, hs, shapes = self.forward_body(x, self._hs)
 
@@ -137,10 +151,7 @@ class RNNContinuous(RNNDiscrete):
             mu = mu.view(shapes + (-1,))
             state_value = state_value.view(shapes + (-1,))
 
-        std = self.log_std.expand_as(mu).exp()
-        dist = Normal(mu, std)
-
-        return dist, hs, state_value
+        return mu, hs, state_value
 
 
 class _RecurrentCnnFamily(_RecurrentFamily):
@@ -182,9 +193,7 @@ class _RecurrentCnnFamily(_RecurrentFamily):
             probs = probs.view(shapes + (-1,))
             state_value = state_value.view(shapes + (-1,))
 
-        dist = Categorical(logits=probs)
-
-        return dist, hs, state_value
+        return probs, hs, state_value
 
 
 class RNNCNNDiscrete(_RecurrentCnnFamily):
@@ -213,6 +222,8 @@ class RNNCNNDiscrete(_RecurrentCnnFamily):
         self.critic_head = make_nn.make_fc(self.hidden_size, 1, num_layers=1)
 
         self.apply(get_weights_init('relu'))
+        self.actor_head[-1].apply(get_weights_init(0.01))
+        self.critic_head[-1].apply(get_weights_init(0.01))
 
 
 class LSTMCNNDiscrete(_RecurrentCnnFamily):
@@ -236,6 +247,8 @@ class LSTMCNNDiscrete(_RecurrentCnnFamily):
         self.critic_head = make_nn.make_fc(self.hidden_size, 1, num_layers=1)
 
         self.apply(get_weights_init('relu'))
+        self.actor_head[-1].apply(get_weights_init(0.01))
+        self.critic_head[-1].apply(get_weights_init(0.01))
 
     def get_action(self, x, dones):
         assert x.ndimension() == 1 + self.obs_space_n, "Only batches are supported"
@@ -245,7 +258,9 @@ class LSTMCNNDiscrete(_RecurrentCnnFamily):
                         self._hs[1].masked_fill(dones.unsqueeze(0).unsqueeze(-1).type(torch.BoolTensor), 0.0))
             hs = self._hs
 
-        dist, self._hs, state_value = self.forward(x, self._hs)
+        probs, self._hs, state_value = self.forward(x, self._hs)
+
+        dist = self.wrap_dist(probs)
 
         if hs is None:
             hs = (torch.zeros_like(self._hs[0]), torch.zeros_like(self._hs[1]))

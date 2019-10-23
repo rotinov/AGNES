@@ -20,9 +20,15 @@ class _MlpFamily(_BasePolicy, abc.ABC):
                                            num_layers=self.layers_num, hidden_size=self.hidden_size)
 
         self.apply(get_weights_init('tanh'))
+        self.actor_head[-1].apply(get_weights_init(0.01))
+        self.critic_head[-1].apply(get_weights_init(0.01))
 
 
 class MLPDiscrete(_MlpFamily):
+    def wrap_dist(self, policy):
+        dist = Categorical(logits=policy)
+        return dist
+
     def forward(self, x):
         if x.ndimension() > 2:
             x = x.view(tuple(x.shape[:-self.obs_space_n]) + (self.obs_space,))
@@ -31,9 +37,7 @@ class MLPDiscrete(_MlpFamily):
 
         probs = self.actor_head(x)
 
-        dist = Categorical(logits=probs)
-
-        return dist, state_value
+        return probs, state_value
 
 
 class MLPContinuous(_MlpFamily):
@@ -41,6 +45,11 @@ class MLPContinuous(_MlpFamily):
         super().__init__(observation_space, action_space)
         logstd = 0.0
         self.log_std = torch.nn.Parameter(torch.ones(self.actions_n) * logstd)
+
+    def wrap_dist(self, mu):
+        std = self.log_std.expand_as(mu).exp()
+        dist = Normal(mu, std)
+        return dist
 
     def forward(self, x):
         if x.ndimension() > 2:
@@ -52,7 +61,4 @@ class MLPContinuous(_MlpFamily):
 
         state_value = state_value.view(-1)
 
-        std = self.log_std.expand_as(mu).exp()
-        dist = Normal(mu, std)
-
-        return dist, state_value.squeeze(-1)
+        return mu, state_value.squeeze(-1)

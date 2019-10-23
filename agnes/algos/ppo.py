@@ -38,12 +38,82 @@ class Buffer(_BaseBuffer):
         return len(self.rollouts)
 
 
+class PPOLoss(torch.nn.Module):
+    _CLIPRANGE = 0.0
+
+    def __init__(self, vf_coef, ent_coef):
+        super().__init__()
+        self.vf_coef = vf_coef
+        self.ent_coef = ent_coef
+
+    @property
+    def CLIPRANGE(self):
+        return self._CLIPRANGE
+
+    @CLIPRANGE.setter
+    def CLIPRANGE(self, VALUE):
+        self._CLIPRANGE = VALUE
+
+    def forward(self, t_new_log_probs, t_state_vals, t_entropies,
+                OLDLOGPROBS, OLDVALS, RETURNS):
+        ADVANTAGES = RETURNS - OLDVALS
+
+        # Normalizing advantages
+        ADVS = ((ADVANTAGES - ADVANTAGES.mean()) / (ADVANTAGES.std() + 1e-8))
+
+        # Making critic losses
+        t_state_vals_clipped = OLDVALS + torch.clamp(t_state_vals - OLDVALS,
+                                                     - self._CLIPRANGE,
+                                                     + self._CLIPRANGE)
+
+        # Making critic final loss
+        t_critic_loss1 = (t_state_vals - RETURNS).pow(2)
+        t_critic_loss2 = (t_state_vals_clipped - RETURNS).pow(2)
+        t_critic_loss = 0.5 * torch.mean(torch.max(t_critic_loss1, t_critic_loss2))
+
+        # Calculating ratio
+        t_ratio = torch.exp(t_new_log_probs - OLDLOGPROBS)
+
+        ADVS = ADVS.view(t_ratio.shape[:-1] + (-1,))
+
+        with torch.no_grad():
+            approxkl = (.5 * torch.mean((OLDLOGPROBS - t_new_log_probs) ** 2)).item()
+            clipfrac = torch.mean((torch.abs(t_ratio - 1.0) > self._CLIPRANGE).float()).item()
+
+        # Calculating surrogates
+        t_rt1 = ADVS * t_ratio
+        t_rt2 = ADVS * torch.clamp(t_ratio,
+                                   1 - self._CLIPRANGE,
+                                   1 + self._CLIPRANGE)
+        t_actor_loss = - torch.min(t_rt1, t_rt2).mean()
+
+        t_entropy = t_entropies.mean()
+
+        # Making loss for Neural Network
+        t_loss = t_actor_loss + self.vf_coef * t_critic_loss - self.ent_coef * t_entropy
+
+        return t_loss, t_actor_loss.detach(), t_critic_loss.detach(), t_entropy.detach(), approxkl, clipfrac
+
+
+class MyDataParallel(torch.nn.DataParallel):
+    def state_dict(self, destination=None, prefix='', keep_vars=False):
+        return self.module.state_dict(destination, prefix, keep_vars)
+
+    def __getattr__(self, name):
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            return getattr(self.module, name)
+
+
 class PpoClass(_BaseAlgo):
     _device = torch.device('cpu')
 
     get_config = get_config
 
     meta = "PPO"
+
+    multigpu = False
 
     def __init__(self, nn: _BaseChooser,
                  observation_space: Space,
@@ -61,11 +131,6 @@ class PpoClass(_BaseAlgo):
             pprint(cnfg)
 
         self._nnet = nn(observation_space, action_space)
-
-        if trainer:
-            print(self._nnet)
-        else:
-            self._nnet.eval()
 
         self.GAMMA = cnfg['gamma']
         self.learning_rate = cnfg['learning_rate']
@@ -86,6 +151,14 @@ class PpoClass(_BaseAlgo):
         final_epoch = int(self.final_timestep / self.nsteps * self.nminibatches * self.noptepochs)  # 312500
 
         if trainer:
+            self.lossfun = PPOLoss(self.vf_coef, self.ent_coef)
+            if torch.cuda.device_count() > 1:
+                self._nnet = MyDataParallel(self._nnet).cuda()
+                print(self._nnet.device_ids)
+                self.multigpu = True
+
+            print(self._nnet)
+
             self._optimizer = torch.optim.Adam(self._nnet.parameters(), lr=self.learning_rate, betas=betas, eps=eps)
 
             self._lr_scheduler = schedules.LinearAnnealingLR(self._optimizer, eta_min=0.0,
@@ -96,6 +169,8 @@ class PpoClass(_BaseAlgo):
                                                              to_epoch=final_epoch)
             else:
                 self._cr_schedule = schedules.LinearSchedule(self.CLIPRANGE, eta_min=0.0, to_epoch=final_epoch)
+        else:
+            self._nnet.eval()
 
         self._buffer = Buffer()
 
@@ -111,11 +186,29 @@ class PpoClass(_BaseAlgo):
             return data
         return None
 
+    def device_info(self):
+        if self.multigpu:
+            return 'Multi-GPU'
+        elif self._device.type == 'cuda':
+            return torch.cuda.get_device_name(device=self._device)
+        else:
+            return 'CPU'
+
+    def to(self, device: str):
+        device = torch.device(device)
+        self._device = device
+
+        self._nnet = self._nnet.to(device)
+        self.lossfun = self.lossfun.to(device)
+
+        return self
+
     def train(self, data):
         if data is None:
             return None
 
-        if isinstance(self._nnet, rnn._RecurrentFamily):
+        if isinstance(self._nnet, rnn._RecurrentFamily) or \
+                (self.multigpu and isinstance(self._nnet.module, rnn._RecurrentFamily)):
             return self.train_with_bptt(data)
 
         if isinstance(data[0], list):
@@ -168,13 +261,6 @@ class PpoClass(_BaseAlgo):
                 )
 
         return info
-
-    def to(self, device: str):
-        device = torch.device(device)
-        self._device = device
-        self._nnet = self._nnet.to(device)
-
-        return self
 
     def _calculate_advantages(self, data):
         states, actions, nstates, rewards, dones, outs = zip(*data)
@@ -264,52 +350,24 @@ class PpoClass(_BaseAlgo):
             RETURNS = torch.cuda.FloatTensor(RETURNS)
 
         # Feedforward with building computation graph
-        t_distrib, t_state_vals_un = self._nnet(STATES)
+        t_probs, t_state_vals_un = self._nnet(STATES)
+        t_distrib = self._nnet.wrap_dist(t_probs)
+
         t_state_vals = t_state_vals_un.squeeze(-1)
 
+        # Calculating entropy
+        t_entropies = t_distrib.entropy()
+
         OLDVALS = OLDVALS.view_as(t_state_vals)
-        ADVANTAGES = RETURNS - OLDVALS
 
         self.CLIPRANGE = self._cr_schedule.get_v()
-
-        # Normalizing advantages
-        ADVS = ((ADVANTAGES - ADVANTAGES.mean()) / (ADVANTAGES.std() + 1e-8))
-
-        if OLDLOGPROBS.ndimension() == 2:
-            ADVS = ADVS.unsqueeze(-1)
-
-        # Making critic losses
-        t_state_vals_clipped = OLDVALS + torch.clamp(t_state_vals - OLDVALS,
-                                                     - self.CLIPRANGE,
-                                                     + self.CLIPRANGE)
-
-        # Making critic final loss
-        t_critic_loss1 = (t_state_vals - RETURNS).pow(2)
-        t_critic_loss2 = (t_state_vals_clipped - RETURNS).pow(2)
-        t_critic_loss = 0.5 * torch.mean(torch.max(t_critic_loss1, t_critic_loss2))
+        self.lossfun._CLIPRANGE = self.CLIPRANGE
 
         # Getting log probs
         t_new_log_probs = t_distrib.log_prob(ACTIONS)
 
-        # Calculating ratio
-        t_ratio = torch.exp(t_new_log_probs - OLDLOGPROBS)
-
-        with torch.no_grad():
-            approxkl = (.5 * torch.mean((OLDLOGPROBS - t_new_log_probs) ** 2)).item()
-            clipfrac = torch.mean((torch.abs(t_ratio - 1.0) > self.CLIPRANGE).float()).item()
-
-        # Calculating surrogates
-        t_rt1 = ADVS * t_ratio
-        t_rt2 = ADVS * torch.clamp(t_ratio,
-                                   1 - self.CLIPRANGE,
-                                   1 + self.CLIPRANGE)
-        t_actor_loss = - torch.min(t_rt1, t_rt2).mean()
-
-        # Calculating entropy
-        t_entropy = t_distrib.entropy().mean()
-
-        # Making loss for Neural Network
-        t_loss = t_actor_loss + self.vf_coef * t_critic_loss - self.ent_coef * t_entropy
+        t_loss, t_actor_loss, t_critic_loss, t_entropy, approxkl, clipfrac = \
+            self.lossfun(t_new_log_probs, t_state_vals, t_entropies, OLDLOGPROBS, OLDVALS, RETURNS)
 
         # Calculating gradients
         self._optimizer.zero_grad()
@@ -370,6 +428,7 @@ class PpoClass(_BaseAlgo):
         # Feedforward with building computation graph
         l_new_log_probs = []
         l_state_vals = []
+        l_entropies = []
 
         for n_state, n_done, n_action in zip(STATES, DONES, ACTIONS):
             if n_done.size == 0:
@@ -391,7 +450,9 @@ class PpoClass(_BaseAlgo):
                 else:
                     t_action = torch.cuda.FloatTensor(n_action)
 
-            t_distrib, t_addition, t_state_vals_un = self._nnet(t_state, t_addition)
+            t_probs, t_addition, t_state_vals_un = self._nnet(t_state, t_addition)
+            t_distrib = self._nnet.wrap_dist(t_probs)
+
             if t_done.ndimension() < 2:
                 t_done = t_done.unsqueeze(-1)
 
@@ -405,53 +466,20 @@ class PpoClass(_BaseAlgo):
             if t_action.ndimension() == 1:
                 t_action = t_action.unsqueeze(-1)
             l_new_log_probs.append(t_distrib.log_prob(t_action).squeeze(-1))
+            l_entropies.append(t_distrib.entropy())
 
         t_new_log_probs = torch.cat(l_new_log_probs, dim=0)
         t_state_vals = torch.cat(l_state_vals, dim=0)
+        t_entropies = torch.cat(l_entropies, dim=0)
 
         OLDVALS = OLDVALS.view_as(t_state_vals)
-        ADVANTAGES = RETURNS - OLDVALS
 
         self.CLIPRANGE = self._cr_schedule.get_v()
 
-        # Normalizing advantages
-        ADVS = ((ADVANTAGES - ADVANTAGES.mean()) / (ADVANTAGES.std() + 1e-8))
+        self.lossfun.CLIPRANGE = self.CLIPRANGE
 
-        if OLDLOGPROBS.ndimension() != 2:
-            ADVS = ADVS.squeeze(-1)
-
-        # Making critic losses
-        t_state_vals_clipped = OLDVALS + torch.clamp(t_state_vals - OLDVALS,
-                                                     - self.CLIPRANGE,
-                                                     + self.CLIPRANGE)
-
-        # Making critic final loss
-        t_critic_loss1 = (t_state_vals - RETURNS).pow(2)
-        t_critic_loss2 = (t_state_vals_clipped - RETURNS).pow(2)
-        t_critic_loss = 0.5 * torch.mean(torch.max(t_critic_loss1, t_critic_loss2))
-
-        # Calculating ratio
-        t_ratio = torch.exp(t_new_log_probs - OLDLOGPROBS)
-
-        with torch.no_grad():
-            approxkl = (.5 * torch.mean((OLDLOGPROBS - t_new_log_probs) ** 2)).item()
-            clipfrac = torch.mean((torch.abs(t_ratio - 1.0) > self.CLIPRANGE).float()).item()
-
-        if ADVS.ndimension() < t_ratio.ndimension():
-            ADVS = ADVS.unsqueeze(-1)
-
-        # Calculating surrogates
-        t_rt1 = ADVS * t_ratio
-        t_rt2 = ADVS * torch.clamp(t_ratio,
-                                   1 - self.CLIPRANGE,
-                                   1 + self.CLIPRANGE)
-        t_actor_loss = - torch.min(t_rt1, t_rt2).mean()
-
-        # Calculating entropy
-        t_entropy = t_distrib.entropy().mean()
-
-        # Making loss for Neural Network
-        t_loss = t_actor_loss + self.vf_coef * t_critic_loss - self.ent_coef * t_entropy
+        t_loss, t_actor_loss, t_critic_loss, t_entropy, approxkl, clipfrac = \
+            self.lossfun(t_new_log_probs, t_state_vals, t_entropies, OLDLOGPROBS, OLDVALS, RETURNS)
 
         # Calculating gradients
         self._optimizer.zero_grad()
@@ -602,6 +630,10 @@ class PpoInitializer:
     @staticmethod
     def get_config(env_type):
         return get_config(env_type)
+
+    @property
+    def meta(self):
+        return PpoClass.meta
 
 
 PPO = PpoInitializer()

@@ -1,6 +1,7 @@
 from agnes.algos.base import _BaseAlgo
 import time
 from collections import deque
+import numpy
 
 
 class Visualize:
@@ -10,9 +11,9 @@ class Visualize:
 
     def run(self):
         state = self.env.reset()
-        self.worker.reset()
+        # self.worker.reset()
         self.env.render()
-        done = [0]
+        done = numpy.zeros(1)
 
         fps = 60
 

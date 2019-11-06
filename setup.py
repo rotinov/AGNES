@@ -34,7 +34,9 @@ setuptools.setup(name='agnes',
                  ]
                  )
 
+
 import pkg_resources
+
 tf_pkg = None
 for tf_pkg_name in ['torch']:
     try:

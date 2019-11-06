@@ -65,12 +65,10 @@ class CNNDiscreteShared(_CnnFamily):
 
         # critic's layer
         self.critic_head = make_nn.make_fc(self.hidden_size, 1)
-        self.conv.apply(get_weights_init('relu'))
+        self.apply(get_weights_init('relu'))
 
         self.actor_head[-1].apply(get_weights_init(0.01))
         self.critic_head[-1].apply(get_weights_init(0.01))
-
-        self.apply(get_weights_init('relu'))
 
     def wrap_dist(self, policy):
         dist = Categorical(logits=policy)

@@ -1,5 +1,5 @@
 from . import VecEnvWrapper
-from agnes.common.running_mean_std import RunningMeanStd
+from agnes.common.running_mean_std import RunningMeanStd, _BaseMeanStd
 import numpy as np
 
 
@@ -9,15 +9,17 @@ class VecNormalize(VecEnvWrapper):
     and returns from an environment.
     """
 
-    def __init__(self, venv, ob=True, ret=True, clipob=10., cliprew=10., gamma=0.99, epsilon=1e-8):
+    def __init__(self, venv, ob=True, ret=True, clipob=10., cliprew=10., gamma=0.99, epsilon=1e-8, rew_shape=(),
+                 normalizer: _BaseMeanStd.__class__ = RunningMeanStd):
         VecEnvWrapper.__init__(self, venv)
-        self.ob_rms = RunningMeanStd(shape=self.observation_space.shape) if ob else None
-        self.ret_rms = RunningMeanStd(shape=()) if ret else None
+        self.ob_rms = normalizer(shape=self.observation_space.shape, epsilon=epsilon) if ob else None
+        self.ret_rms = normalizer(shape=rew_shape, epsilon=epsilon) if ret else None
         self.clipob = clipob
         self.cliprew = cliprew
-        self.ret = np.zeros(self.num_envs)
+        self.ret = np.zeros((self.num_envs,) + rew_shape)
         self.gamma = gamma
         self.epsilon = epsilon
+        self.rew_shape = rew_shape
 
     def step_wait(self):
         obs, rews, news, infos = self.venv.step_wait()
@@ -38,6 +40,6 @@ class VecNormalize(VecEnvWrapper):
             return obs
 
     def reset(self):
-        self.ret = np.zeros(self.num_envs)
+        self.ret = np.zeros((self.num_envs,) + self.rew_shape)
         obs = self.venv.reset()
         return self._obfilt(obs)

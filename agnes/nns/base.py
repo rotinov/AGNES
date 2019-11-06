@@ -1,10 +1,9 @@
 import abc
-import torch
-from torch.distributions import Categorical, Normal
-from gym import spaces
-import numpy
 
-from agnes.common.init_weights import get_weights_init
+import numpy
+import torch
+from torch import distributions
+from gym import spaces
 
 
 class _BasePolicy(torch.nn.Module, abc.ABC):
@@ -42,7 +41,7 @@ class _BasePolicy(torch.nn.Module, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def wrap_dist(self, *args):
+    def wrap_dist(self, *args) -> distributions.Distribution:
         pass
 
     def get_action(self, x, done):
@@ -67,8 +66,10 @@ class _BasePolicy(torch.nn.Module, abc.ABC):
 
         return (smpled.detach().squeeze(-1).cpu().numpy(),
                 smpled.detach().squeeze(-1).cpu().numpy(),
-                (log_prob.detach().squeeze(-1).cpu().numpy(),
-                 state_value.detach().squeeze(-1).cpu().numpy()))
+                {
+                    "old_log_probs": log_prob.detach().squeeze(-1).cpu().numpy(),
+                    "old_vals": state_value.detach().squeeze(-1).cpu().numpy()
+                })
 
     def get_val(self, states):
         return self.forward(states)[1]

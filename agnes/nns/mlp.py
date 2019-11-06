@@ -44,7 +44,7 @@ class MLPContinuous(_MlpFamily):
     def __init__(self, observation_space: spaces.Space, action_space: spaces.Space):
         super().__init__(observation_space, action_space)
         logstd = 0.0
-        self.log_std = torch.nn.Parameter(torch.ones(self.actions_n) * logstd)
+        self.log_std = torch.nn.Parameter(torch.ones(self.actions_n) * logstd, requires_grad=True)
 
     def wrap_dist(self, mu):
         std = self.log_std.expand_as(mu).exp()

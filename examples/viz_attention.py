@@ -129,7 +129,7 @@ class VisualizeAttention:
 env_name = "BreakoutNoFrameskip-v4"
 
 env = agnes.make_env(env_name, config={"frame_stack": True})
-config, _ = agnes.PPO.get_config(env[1])
+config, _ = agnes.PPO.get_config(env["env_type"])
 
 runner = agnes.Single(env, agnes.PPO, agnes.LSTMCNN, config=config)
 

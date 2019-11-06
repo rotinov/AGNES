@@ -138,6 +138,7 @@ class VecEnv(ABC):
             self.viewer = rendering.SimpleImageViewer()
         return self.viewer
 
+
 class VecEnvWrapper(VecEnv):
     """
     An environment wrapper that applies to an entire batch
@@ -147,8 +148,8 @@ class VecEnvWrapper(VecEnv):
     def __init__(self, venv, observation_space=None, action_space=None):
         self.venv = venv
         super().__init__(num_envs=venv.num_envs,
-                        observation_space=observation_space or venv.observation_space,
-                        action_space=action_space or venv.action_space)
+                         observation_space=observation_space or venv.observation_space,
+                         action_space=action_space or venv.action_space)
 
     def step_async(self, actions):
         self.venv.step_async(actions)
@@ -175,6 +176,7 @@ class VecEnvWrapper(VecEnv):
             raise AttributeError("attempted to get missing private attribute '{}'".format(name))
         return getattr(self.venv, name)
 
+
 class VecEnvObservationWrapper(VecEnvWrapper):
     @abstractmethod
     def process(self, obs):
@@ -187,6 +189,7 @@ class VecEnvObservationWrapper(VecEnvWrapper):
     def step_wait(self):
         obs, rews, dones, infos = self.venv.step_wait()
         return self.process(obs), rews, dones, infos
+
 
 class CloudpickleWrapper(object):
     """
@@ -208,9 +211,11 @@ class CloudpickleWrapper(object):
 @contextlib.contextmanager
 def clear_mpi_env_vars():
     """
-    from mpi4py import MPI will call MPI_Init by default.  If the child process has MPI environment variables, MPI will think that the child process is an MPI process just like the parent and do bad things such as hang.
-    This context manager is a hacky way to clear those environment variables temporarily such as when we are starting multiprocessing
-    Processes.
+    from mpi4py import MPI will call MPI_Init by default.
+    If the child process has MPI environment variables,
+    MPI will think that the child process is an MPI process just like the parent and do bad things such as hang.
+    This context manager is a hacky way to clear those environment variables temporarily such as
+    when we are starting multiprocessing Processes.
     """
     removed_environment = {}
     for k, v in list(os.environ.items()):

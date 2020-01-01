@@ -158,7 +158,7 @@ class PpoRndClass(PpoClass):
 
         return info
 
-    def get_state_dict(self) -> Dict[str, OrderedDict]:
+    def get_state_dict(self) -> Dict[str, dict]:
         assert self._trainer
         return {
             "nnet": self._nnet.state_dict(),
@@ -167,7 +167,7 @@ class PpoRndClass(PpoClass):
             "rnd_optimizer": self.rnd_optimizer.state_dict()
         }
 
-    def load_state_dict(self, state_dict: Dict[str, OrderedDict]) -> tuple:
+    def load_state_dict(self, state_dict: Dict[str, dict]) -> tuple:
         info = []
         if state_dict.get("optimizer") and hasattr(self, "_optimizer"):
             info.append(self._optimizer.load_state_dict(state_dict["optimizer"]))

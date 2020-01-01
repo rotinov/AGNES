@@ -61,14 +61,14 @@ class _BaseAlgo(abc.ABC):
     def is_trainer(self) -> bool:
         return self._trainer
 
-    def get_state_dict(self) -> Dict[str, OrderedDict]:
+    def get_state_dict(self) -> Dict[str, dict]:
         assert self._trainer
         return {
             "nnet": self._nnet.state_dict(),
             "optimizer": self._optimizer.state_dict()
         }
 
-    def load_state_dict(self, state_dict: Dict[str, OrderedDict]) -> tuple:
+    def load_state_dict(self, state_dict: Dict[str, dict]) -> tuple:
         info = []
         if state_dict.get("optimizer") and hasattr(self, "_optimizer"):
             info.append(self._optimizer.load_state_dict(state_dict["optimizer"]))

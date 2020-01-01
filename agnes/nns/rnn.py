@@ -63,7 +63,7 @@ class RNNDiscrete(_RecurrentFamily):
                  observation_space: spaces.Space, action_space: spaces.Space):
         super(RNNDiscrete, self).__init__(observation_space, action_space)
 
-        activation = torch.nn.ReLU
+        activation = torch.nn.Tanh
 
         # actor's layer
         self.actor_body_fc = make_nn.make_fc(self.obs_space, self.hidden_size, hidden_size=self.hidden_size,

@@ -9,9 +9,9 @@ def test_config():
         gamma=0.98,
         lam=0.95,
         noptepochs=4,
-        max_grad_norm=8.0,
+        max_grad_norm=1.0,
         learning_rate=lambda x: 2.5e-4*x,
-        cliprange=lambda x: 0.2*x,
+        cliprange=lambda x: 0.1*x,
         vf_coef=0.5,
         ent_coef=.01,
         bptt=8

@@ -47,8 +47,8 @@ class EMeanStd(_BaseMeanStd):
     # https://en.wikipedia.org/wiki/Moving_average#Exponentially_weighted_moving_variance_and_standard_deviation
     def __init__(self, alpha=1e-5, epsilon: float = 1e-8, shape=()):
         self.mean: np.ndarray = np.ones(shape, 'float64')
-        self.var: np.ndarray = np.zeros(shape, 'float64') + epsilon
-        self.std: np.ndarray = np.ones(shape, 'float64') + epsilon
+        self.var: np.ndarray = np.ones(shape, 'float64')
+        self.std: np.ndarray = np.ones(shape, 'float64')
         self.alpha: float = alpha
         self.epsilon = epsilon
         self._shape = shape if isinstance(shape, tuple) else (1,)
@@ -60,12 +60,14 @@ class EMeanStd(_BaseMeanStd):
         batch_mean: np.ndarray = np.mean(x, axis=0, dtype=np.float64)
         if self.first:
             self.mean: np.ndarray = batch_mean
-            self.var: np.ndarray = np.sum(np.abs(self.mean), axis=0, dtype=np.float64)
+            self.var: np.ndarray = np.mean(np.square(x - self.mean), axis=0, dtype=np.float64)
+            if x.shape[0] == 1:
+                self.var: np.ndarray = self.mean
+            else:
+                self.var: np.ndarray = np.mean(np.square(x - self.mean), axis=0, dtype=np.float64)
             self.first = False
         else:
             self.mean: np.ndarray = self.alpha * batch_mean + (1 - self.alpha) * self.mean
 
-            self.var: np.ndarray = (1 - self.alpha) * \
-                                   (self.var + self.alpha * np.sum(np.square(x - self.mean, dtype=np.float64),
-                                                                   axis=0, dtype=np.float64))
+            self.var: np.ndarray = (1 - self.alpha) * self.var + self.alpha * np.mean(np.square(x - self.mean, dtype=np.float64), axis=0, dtype=np.float64)
         self.std: np.ndarray = np.sqrt(self.var.clip(min=self.epsilon))

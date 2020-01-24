@@ -164,8 +164,6 @@ class CsvLogger(_BaseLogger):
         if self.file is None:
             self.log_path = osp.join(self.root_dir, self.folder_name)
 
-            print(self.log_path)
-
             self._create_dirs()
 
             filename = osp.join(self.log_path, 'progress.csv')

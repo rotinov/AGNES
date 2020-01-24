@@ -6,51 +6,15 @@ import numpy
 
 
 colors = [
-    {
-        "R": 0,
-        "G": 122,
-        "B": 255
-    },
-    {
-        "R": 52,
-        "G": 199,
-        "B": 89
-    },
-    {
-        "R": 88,
-        "G": 86,
-        "B": 214
-    },
-    {
-        "R": 255,
-        "G": 149,
-        "B": 0
-    },
-    {
-        "R": 255,
-        "G": 45,
-        "B": 85
-    },
-    {
-        "R": 175,
-        "G": 82,
-        "B": 222
-    },
-    {
-        "R": 255,
-        "G": 59,
-        "B": 48
-    },
-    {
-        "R": 90,
-        "G": 200,
-        "B": 250
-    },
-    {
-        "R": 255,
-        "G": 204,
-        "B": 0
-    }
+    {"R": 0, "G": 122, "B": 255},
+    {"R": 52, "G": 199, "B": 89},
+    {"R": 88, "G": 86, "B": 214},
+    {"R": 255, "G": 149, "B": 0},
+    {"R": 255, "G": 45, "B": 85},
+    {"R": 175, "G": 82, "B": 222},
+    {"R": 255, "G": 59, "B": 48},
+    {"R": 90, "G": 200, "B": 250},
+    {"R": 255, "G": 204, "B": 0}
 ]
 
 
@@ -111,14 +75,17 @@ def symmetric_ema(xolds, yolds, low=None, high=None, n=512, decay_steps=1., low_
     return xs, ys, count_ys
 
 
-def plot_one(axis, root_dir, color=(0.1, 0.7, 0.9, 1.0), shaded_err=True, shaded_std=True):
+def plot_one(axis, root_dir, color=(0.1, 0.7, 0.9, 1.0), shaded_err=True, shaded_std=True, print_out=True):
     all_sub_dirs = next(os.walk(root_dir))[1]
-    print(" "*4, "Seeds:", ", ".join(all_sub_dirs))
+    if print_out:
+        print(" "*4, "Seeds:", ", ".join(all_sub_dirs))
 
     all_rews = []
     all_steps = []
     for sub_dir in all_sub_dirs:
         fname = os.path.join(root_dir, sub_dir, "progress.csv")
+        if not os.path.exists(fname):
+            continue
         dataframe = pandas.read_csv(fname, index_col=None, comment='#')
 
         item_steps = numpy.asarray(dataframe['misc/serial_timesteps'])
@@ -129,6 +96,9 @@ def plot_one(axis, root_dir, color=(0.1, 0.7, 0.9, 1.0), shaded_err=True, shaded
 
     low = max(steps[0] for steps in all_steps)
     high = min(steps[-1] for steps in all_steps)
+
+    if low == high:
+        return
 
     steps_new = numpy.linspace(low, high, 512)
 
@@ -150,26 +120,74 @@ def plot_one(axis, root_dir, color=(0.1, 0.7, 0.9, 1.0), shaded_err=True, shaded
         axis.fill_between(steps_new, av_rews - std, av_rews + std, color=[color], alpha=.2)
 
 
-def plot_all(path, shaded_err: bool = True, shaded_std: bool = True):
-    fig, axis = plt.subplots(1, 1, sharex=True)
-    all_sub_dirs = next(os.walk(path))[1]
+def plot_all(path, shaded_err: bool = True, shaded_std: bool = True, redraw: bool = True):
+    title = path[path.rfind("/") + 1:path.rfind("_")]
 
-    for i in range(len(all_sub_dirs)):
-        print("Plotting:", all_sub_dirs[i])
-        plot_one(
-            axis,
-            os.path.join(path, all_sub_dirs[i]),
-            color=tuple([float(item) / 255. for item in colors[i % len(colors)].values()]),
-            shaded_err=shaded_err, shaded_std=shaded_std
-        )
+    if redraw:
+        plt.ion()
 
-    axis.legend(all_sub_dirs)
+    fig, axes = plt.subplots(1, 1, num=title)
 
-    plt.title(path[path.rfind("/") + 1:path.rfind("_")])
-    plt.xlabel("Timesteps")
-    plt.ylabel("Reward")
+    if redraw:
+        date = -1
 
-    plt.show()
+        while True:
+            date_new = -1
+            for root, dirs, files in os.walk(path):
+                for name in files:
+                    date_new = max(os.stat(os.path.join(root, name)).st_mtime, date_new)
+
+            if date == date_new:
+                plt.pause(1)
+                continue
+
+            date = date_new
+
+            plt.cla()
+            axis = plt.gca()
+
+            all_sub_dirs = next(os.walk(path))[1]
+
+            for i in range(len(all_sub_dirs)):
+                plot_one(
+                    axis,
+                    os.path.join(path, all_sub_dirs[i]),
+                    color=tuple([float(item) / 255. for item in colors[i % len(colors)].values()]),
+                    shaded_err=shaded_err, shaded_std=shaded_std, print_out=False
+                )
+
+            axis.legend(all_sub_dirs)
+
+            plt.title(path[path.rfind("/") + 1:path.rfind("_")])
+            plt.xlabel("Timesteps")
+            plt.ylabel("Reward")
+            fig.tight_layout()
+
+            plt.pause(1)
+    else:
+        axis = plt.gca()
+
+        all_sub_dirs = next(os.walk(path))[1]
+
+        for i in range(len(all_sub_dirs)):
+            print("Plotting:", all_sub_dirs[i])
+            plot_one(
+                axis,
+                os.path.join(path, all_sub_dirs[i]),
+                color=tuple([float(item) / 255. for item in colors[i % len(colors)].values()]),
+                shaded_err=shaded_err, shaded_std=shaded_std
+            )
+
+        axis.legend(all_sub_dirs)
+
+        plt.title(title)
+        plt.xlabel("Timesteps")
+        plt.ylabel("Reward")
+        fig.tight_layout()
+
+        plt.show()
 
 
-plot_all(".logs/Ant-v2_MLP")
+styles = ['seaborn-whitegrid', 'seaborn-paper', 'dark_background', 'ggplot']
+plt.style.use(styles[0])  # InvertedPendulum
+plot_all(".logs/Reacher-v2_MLP", redraw=True)

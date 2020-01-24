@@ -41,7 +41,7 @@ class _BasePolicy(torch.nn.Module, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def wrap_dist(self, *args) -> distributions.Distribution:
+    def wrap_dist(self, vec) -> distributions.Distribution:
         pass
 
     def get_action(self, x, done):

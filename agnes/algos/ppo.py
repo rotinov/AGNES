@@ -30,7 +30,7 @@ class PPOLoss(torch.nn.Module):
         self._CLIPRANGE = VALUE
 
     def forward(self, t_new_log_probs, t_state_vals, t_entropies,
-                OLDLOGPROBS, OLDVALS, RETURNS, ADVANTAGES):
+                OLDLOGPROBS, OLDVALS, RETURNS, ADVANTAGES) -> Tuple[torch.Tensor, Dict[str, float]]:
         # Making critic losses
         t_state_vals_clipped = OLDVALS + torch.clamp(t_state_vals - OLDVALS,
                                                      - self._CLIPRANGE,
@@ -47,8 +47,8 @@ class PPOLoss(torch.nn.Module):
         ADVS = ADVANTAGES.view(t_ratio.shape[:-1] + (-1,))
 
         with torch.no_grad():
-            approxkl = (.5 * torch.mean((OLDLOGPROBS - t_new_log_probs) ** 2)).item()
-            clipfrac = torch.mean((torch.abs(t_ratio - 1.0) > self._CLIPRANGE).float()).item()
+            approxkl = (.5 * torch.mean((OLDLOGPROBS - t_new_log_probs) ** 2))
+            clipfrac = torch.mean((torch.abs(t_ratio - 1.0) > self._CLIPRANGE).float())
 
         # Calculating surrogates
         t_rt1 = ADVS * t_ratio
@@ -64,7 +64,11 @@ class PPOLoss(torch.nn.Module):
         # Making loss for Neural Network
         t_loss = t_actor_loss + self.vf_coef * t_critic_loss - self.ent_coef * t_entropy
 
-        return t_loss, t_actor_loss.detach(), t_critic_loss.detach(), t_entropy.detach(), approxkl, clipfrac
+        return t_loss, {"loss/policy_loss": t_actor_loss.item(),
+                        "loss/value_loss": t_critic_loss.item(),
+                        "loss/policy_entropy": t_entropy.item(),
+                        "loss/approxkl": approxkl.item(),
+                        "loss/clipfrac": clipfrac.item()}
 
 
 class PpoClass(A2cClass):
@@ -122,7 +126,7 @@ class PpoClass(A2cClass):
         # Getting log probs
         t_new_log_probs = t_distrib.log_prob(data["action"]).view_as(data["old_log_probs"])
 
-        t_loss, t_actor_loss, t_critic_loss, t_entropy, approxkl, clipfrac = \
+        t_loss, stat_from_lr = \
             self._lossfun(t_new_log_probs, t_state_vals, t_entropies, data["old_log_probs"],
                           data["old_vals"], data["returns"], data["advantages"])
 
@@ -138,16 +142,9 @@ class PpoClass(A2cClass):
         self._lr_scheduler.step()
         self._cr_schedule.step()
 
-        return {"loss/policy_loss": t_actor_loss.item(),
-                "loss/value_loss": t_critic_loss.item(),
-                "loss/policy_entropy": t_entropy.item(),
-                "loss/approxkl": approxkl,
-                "loss/clipfrac": clipfrac,
-                "misc/explained_variance": logger.explained_variance(
-                    numpy.mean(t_state_vals.detach().cpu().numpy(), axis=-1),
-                    numpy.mean(data['returns'].detach().cpu().numpy(), axis=-1)) if data['returns'].ndim > 1 else
-                logger.explained_variance(t_state_vals.detach().cpu().numpy(), data['returns'].detach().cpu().numpy())
-                }
+        return self.format_explained_variance(t_state_vals.detach().cpu().numpy(),
+                                              data["returns"].detach().cpu().numpy(),
+                                              stat_from_lr)
 
     def _one_train_seq(self, data: Dict[str, torch.Tensor or List[torch.Tensor]]) -> Dict[str, float]:
         if data["additions"].shape[1] == 2:
@@ -229,7 +226,7 @@ class PpoClass(A2cClass):
 
         self._lossfun.CLIPRANGE = self.CLIPRANGE
 
-        t_loss, t_actor_loss, t_critic_loss, t_entropy, approxkl, clipfrac = \
+        t_loss, stat_from_lr = \
             self._lossfun(t_new_log_probs, t_state_vals, t_entropies, OLDLOGPROBS, OLDVALS, RETURNS, data["advantages"])
 
         # Calculating gradients
@@ -244,15 +241,9 @@ class PpoClass(A2cClass):
         self._lr_scheduler.step()
         self._cr_schedule.step()
 
-        return {"loss/policy_loss": t_actor_loss.item(),
-                "loss/value_loss": t_critic_loss.item(),
-                "loss/policy_entropy": t_entropy.item(),
-                "loss/approxkl": approxkl,
-                "loss/clipfrac": clipfrac,
-                "misc/explained_variance": logger.explained_variance(
-                    numpy.squeeze(t_state_vals.detach().cpu().numpy(), axis=-1).reshape(-1),
-                    data["returns"].cpu().numpy().reshape(-1))
-                }
+        return self.format_explained_variance(t_state_vals.detach().cpu().numpy(),
+                                              data["returns"].detach().cpu().numpy(),
+                                              stat_from_lr)
 
 
 class PpoInitializer:

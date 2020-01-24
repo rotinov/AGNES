@@ -38,8 +38,8 @@ class CNNDiscreteCopy(_CnnFamily):
         self.actor_head[-1].apply(get_weights_init(0.01))
         self.critic_head[-1].apply(get_weights_init(0.01))
 
-    def wrap_dist(self, policy):
-        dist = Categorical(logits=policy)
+    def wrap_dist(self, vec) -> torch.distributions.Categorical:
+        dist = Categorical(logits=vec)
         return dist
 
     def forward(self, x):
@@ -70,8 +70,8 @@ class CNNDiscreteShared(_CnnFamily):
         self.actor_head[-1].apply(get_weights_init(0.01))
         self.critic_head[-1].apply(get_weights_init(0.01))
 
-    def wrap_dist(self, policy):
-        dist = Categorical(logits=policy)
+    def wrap_dist(self, vec) -> torch.distributions.Categorical:
+        dist = Categorical(logits=vec)
         return dist
 
     def forward(self, x):

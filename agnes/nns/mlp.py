@@ -25,8 +25,8 @@ class _MlpFamily(_BasePolicy, abc.ABC):
 
 
 class MLPDiscrete(_MlpFamily):
-    def wrap_dist(self, policy):
-        dist = Categorical(logits=policy)
+    def wrap_dist(self, vec) -> torch.distributions.Categorical:
+        dist = Categorical(logits=vec)
         return dist
 
     def forward(self, x):
@@ -46,9 +46,9 @@ class MLPContinuous(_MlpFamily):
         logstd = 0.0
         self.log_std = torch.nn.Parameter(torch.ones(self.actions_n) * logstd, requires_grad=True)
 
-    def wrap_dist(self, mu):
-        std = self.log_std.expand_as(mu).exp()
-        dist = Normal(mu, std)
+    def wrap_dist(self, vec) -> torch.distributions.Normal:
+        std = self.log_std.expand_as(vec).exp()
+        dist = Normal(vec, std)
         return dist
 
     def forward(self, x):

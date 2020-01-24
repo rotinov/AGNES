@@ -21,8 +21,8 @@ class _RecurrentFamily(_BasePolicy):
                                              torch.Tensor]:
         pass
 
-    def wrap_dist(self, policy):
-        dist = Categorical(logits=policy)
+    def wrap_dist(self, vec) -> torch.distributions.Categorical:
+        dist = Categorical(logits=vec)
         return dist
 
     def get_action(self, x, dones: torch.Tensor):
@@ -143,9 +143,9 @@ class RNNContinuous(RNNDiscrete):
         self.actor_head.apply(get_weights_init(0.01))
         self.critic_head.apply(get_weights_init(0.01))
 
-    def wrap_dist(self, mu):
-        std = self.log_std.expand_as(mu).exp()
-        dist = Normal(mu, std)
+    def wrap_dist(self, vec) -> torch.distributions.Normal:
+        std = self.log_std.expand_as(vec).exp()
+        dist = Normal(vec, std)
         return dist
 
     def forward(self, x: torch.Tensor, hs: torch.Tensor) -> typing.Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:

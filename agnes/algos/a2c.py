@@ -40,22 +40,20 @@ class Buffer(_BaseBuffer):
 
 
 class A2CLoss(torch.nn.Module):
-    _CLIPRANGE = 0.0
-
     def __init__(self, vf_coef, ent_coef):
         super().__init__()
         self.vf_coef = vf_coef
         self.ent_coef = ent_coef
 
     def forward(self, t_new_log_probs, t_state_vals, t_entropies,
-                OLDLOGPROBS, OLDVALS, RETURNS, ADVANTAGES):
+                OLDLOGPROBS, OLDVALS, RETURNS, ADVANTAGES) -> Tuple[torch.Tensor, Dict[str, float]]:
         # Making critic final loss
         t_critic_loss = 0.5 * (t_state_vals - RETURNS).pow(2).mean()
 
         ADVS = ADVANTAGES.view(t_new_log_probs.shape[:-1] + (-1,))
 
         with torch.no_grad():
-            approxkl = (.5 * torch.mean((OLDLOGPROBS - t_new_log_probs) ** 2)).item()
+            approxkl = (.5 * torch.mean((OLDLOGPROBS - t_new_log_probs) ** 2))
 
         # Calculating surrogates
         t_rt1 = ADVS * t_new_log_probs
@@ -68,7 +66,10 @@ class A2CLoss(torch.nn.Module):
         # Making loss for Neural Network
         t_loss = t_actor_loss + self.vf_coef * t_critic_loss - self.ent_coef * t_entropy
 
-        return t_loss, t_actor_loss.detach(), t_critic_loss.detach(), t_entropy.detach(), approxkl
+        return t_loss, {"loss/policy_loss": t_actor_loss.item(),
+                        "loss/value_loss": t_critic_loss.item(),
+                        "loss/policy_entropy": t_entropy.item(),
+                        "loss/approxkl": approxkl.item()}
 
 
 class MyDataParallel(torch.nn.DataParallel):
@@ -309,7 +310,7 @@ class A2cClass(_BaseAlgo):
         # Getting log probs
         t_new_log_probs = t_distrib.log_prob(data["action"]).view_as(data["old_log_probs"])
 
-        t_loss, t_actor_loss, t_critic_loss, t_entropy, approxkl = \
+        t_loss, stat_from_lr = \
             self._lossfun(t_new_log_probs, t_state_vals, t_entropies, data["old_log_probs"],
                           data["old_vals"], data["returns"], data["advantages"])
 
@@ -324,15 +325,9 @@ class A2cClass(_BaseAlgo):
         self._optimizer.step()
         self._lr_scheduler.step()
 
-        return {"loss/policy_loss": t_actor_loss.item(),
-                "loss/value_loss": t_critic_loss.item(),
-                "loss/policy_entropy": t_entropy.item(),
-                "loss/approxkl": approxkl,
-                "misc/explained_variance": logger.explained_variance(
-                    numpy.mean(t_state_vals.detach().cpu().numpy(), axis=-1),
-                    numpy.mean(data['returns'].detach().cpu().numpy(), axis=-1)) if data['returns'].ndim > 1 else
-                logger.explained_variance(t_state_vals.detach().cpu().numpy(), data['returns'].detach().cpu().numpy())
-                }
+        return self.format_explained_variance(t_state_vals.detach().cpu().numpy(),
+                                              data["returns"].detach().cpu().numpy(),
+                                              stat_from_lr)
 
     def _one_train_seq(self, data: Dict[str, torch.Tensor or List[torch.Tensor]]) -> Dict[str, float]:
         if data["additions"].shape[1] == 2:
@@ -410,7 +405,7 @@ class A2cClass(_BaseAlgo):
         OLDVALS = data["old_vals"].view_as(t_state_vals)
         RETURNS = data["returns"].view_as(t_state_vals)
 
-        t_loss, t_actor_loss, t_critic_loss, t_entropy, approxkl = \
+        t_loss, stat_from_lr = \
             self._lossfun(t_new_log_probs, t_state_vals, t_entropies, OLDLOGPROBS, OLDVALS, RETURNS, data["advantages"])
 
         # Calculating gradients
@@ -424,14 +419,9 @@ class A2cClass(_BaseAlgo):
         self._optimizer.step()
         self._lr_scheduler.step()
 
-        return {"loss/policy_loss": t_actor_loss.item(),
-                "loss/value_loss": t_critic_loss.item(),
-                "loss/policy_entropy": t_entropy.item(),
-                "loss/approxkl": approxkl,
-                "misc/explained_variance": logger.explained_variance(
-                    numpy.squeeze(t_state_vals.detach().cpu().numpy(), axis=-1).reshape(-1),
-                    data["returns"].cpu().numpy().reshape(-1))
-                }
+        return self.format_explained_variance(t_state_vals.detach().cpu().numpy(),
+                                              data["returns"].detach().cpu().numpy(),
+                                              stat_from_lr)
 
     def train_with_bptt(self, data):
         assert all(k in data[0][0] if isinstance(data[0], list) else data[0]
@@ -546,6 +536,19 @@ class A2cClass(_BaseAlgo):
                         info.append(self._one_train_seq(minibatch))
 
         return info
+
+    @staticmethod
+    def format_explained_variance(t_state_vals: numpy.ndarray,
+                                  returns: numpy.ndarray,
+                                  stat_from_lr: Dict[str, float]) -> Dict[str, float]:
+        if returns.ndim > 1:
+            stat_from_lr["misc/explained_variance"] = logger.explained_variance(
+                numpy.mean(t_state_vals, axis=-1),
+                numpy.mean(returns, axis=-1))
+        else:
+            stat_from_lr["misc/explained_variance"] = logger.explained_variance(t_state_vals, returns)
+
+        return stat_from_lr
 
 
 class A2cInitializer:

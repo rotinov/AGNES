@@ -64,6 +64,10 @@ class BaseRunner(abc.ABC):
         if self.is_trainer():
             self.saver = Saver(filename, frames_period)
 
+    def save(self, filename: str) -> None:
+        if self.is_trainer():
+            self.trainer.save(filename)
+
     def _one_log(self, lr_things, epinfobuf, nbatch, tfirststart, tstart, tnow, nupdates, stepping_to_learning=None,
                  print_out=True):
 

@@ -13,7 +13,7 @@ def safemean(xs):
     return numpy.nan if len(xs) == 0 else numpy.mean(xs)
 
 
-def explained_variance(ypred, y):
+def explained_variance(ypred: numpy.ndarray, y: numpy.ndarray):
     """
     Computes fraction of variance that ypred explains about y.
     Returns 1 - Var[y-ypred] / Var[y]
@@ -22,7 +22,9 @@ def explained_variance(ypred, y):
         ev=1  =>  perfect prediction
         ev<0  =>  worse than just predicting zero
     """
-    assert y.ndim == 1 and ypred.ndim == 1
+    assert y.shape == ypred.shape, "Shapes are different"
+    y = y.reshape(-1)
+    ypred = ypred.reshape(-1)
     vary = numpy.var(y)
     return numpy.nan if vary == 0 else 1 - numpy.var(y-ypred) / vary
 

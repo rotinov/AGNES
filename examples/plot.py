@@ -190,4 +190,4 @@ def plot_all(path, shaded_err: bool = True, shaded_std: bool = True, redraw: boo
 
 styles = ['seaborn-whitegrid', 'seaborn-paper', 'dark_background', 'ggplot']
 plt.style.use(styles[0])  # InvertedPendulum
-plot_all(".logs/Reacher-v2_MLP", redraw=True)
+plot_all("results/MuJoCo/Ant-v2_MLP", redraw=True)

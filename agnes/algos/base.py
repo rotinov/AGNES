@@ -68,7 +68,9 @@ class _BaseAlgo(abc.ABC):
             "optimizer": self._optimizer.state_dict()
         }
 
-    def load_state_dict(self, state_dict: Dict[str, dict]) -> tuple:
+    def load_state_dict(self, state_dict: Dict[str, dict] or dict) -> tuple:
+        if state_dict.get("optimizer") is None:
+            return self._nnet.load_state_dict(state_dict)
         info = []
         if state_dict.get("optimizer") and hasattr(self, "_optimizer"):
             info.append(self._optimizer.load_state_dict(state_dict["optimizer"]))

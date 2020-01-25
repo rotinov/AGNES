@@ -6,14 +6,15 @@ def test_config():
         timesteps=30000,
         nsteps=128,
         nminibatches=4,
-        gamma=1.0,
-        lam=1.0,
+        gamma=0.98,
+        lam=0.95,
         noptepochs=4,
-        max_grad_norm=40,
-        learning_rate=2.5e-4,
-        cliprange=0.1,
-        vf_coef=1.0,
-        ent_coef=.01
+        max_grad_norm=1.0,
+        learning_rate=lambda x: 2.5e-4*x,
+        cliprange=lambda x: 0.1*x,
+        vf_coef=0.5,
+        ent_coef=.01,
+        bptt=8
     )
 
 

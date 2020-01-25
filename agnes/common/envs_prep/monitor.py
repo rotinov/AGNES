@@ -5,6 +5,7 @@ import csv
 import os.path as osp
 import json
 import os
+import numpy
 
 
 class Monitor(Wrapper):
@@ -16,9 +17,9 @@ class Monitor(Wrapper):
         self.tstart = time.time()
         if filename:
             self.results_writer = ResultsWriter(filename, rank=rank,
-                header={"t_start": time.time(), 'env_id' : env.spec and env.spec.id},
-                extra_keys=reset_keywords + info_keywords
-            )
+                                                header={"t_start": time.time(), 'env_id': env.spec and env.spec.id},
+                                                extra_keys=reset_keywords + info_keywords
+                                                )
         else:
             self.results_writer = None
         self.reset_keywords = reset_keywords
@@ -30,20 +31,22 @@ class Monitor(Wrapper):
         self.episode_lengths = []
         self.episode_times = []
         self.total_steps = 0
-        self.current_reset_info = {} # extra info about the current episode, that was passed in during reset()
+        self.current_reset_info = {}  # extra info about the current episode, that was passed in during reset()
 
     def reset(self, **kwargs):
         self.reset_state()
         for k in self.reset_keywords:
             v = kwargs.get(k)
             if v is None:
-                raise ValueError('Expected you to pass kwarg %s into reset'%k)
+                raise ValueError('Expected you to pass kwarg %s into reset' % k)
             self.current_reset_info[k] = v
         return self.env.reset(**kwargs)
 
     def reset_state(self):
         if not self.allow_early_resets and not self.needs_reset:
-            raise RuntimeError("Tried to reset an environment before done. If you want to allow early resets, wrap your env with Monitor(env, path, allow_early_resets=True)")
+            raise RuntimeError("Tried to reset an environment before done. "
+                               "If you want to allow early resets, "
+                               "wrap your env with Monitor(env, path, allow_early_resets=True)")
         self.rewards = []
         self.needs_reset = False
 
@@ -55,12 +58,14 @@ class Monitor(Wrapper):
         return ob, rew, done, info
 
     def update(self, ob, rew, done, info):
+        if isinstance(rew, numpy.ndarray):
+            rew = rew[0]
         self.rewards.append(rew)
         if done:
             self.needs_reset = True
             eprew = sum(self.rewards)
             eplen = len(self.rewards)
-            epinfo = {"r": round(eprew, 6), "l": eplen, "t": round(time.time() - self.tstart, 6)}
+            epinfo = {"r": numpy.round(eprew, 6), "l": eplen, "t": round(time.time() - self.tstart, 6)}
             for k in self.info_keywords:
                 epinfo[k] = info[k]
             self.episode_rewards.append(eprew)
@@ -134,7 +139,7 @@ def load_results(dir):
     import pandas
     monitor_files = (
         glob(osp.join(dir, "*monitor.json")) +
-        glob(osp.join(dir, "*monitor.csv"))) # get both csv and (old) json files
+        glob(osp.join(dir, "*monitor.csv")))  # get both csv and (old) json files
     if not monitor_files:
         raise LoadMonitorResultsError("no monitor files of the form *%s found in %s" % (Monitor.EXT, dir))
     dfs = []
@@ -149,7 +154,7 @@ def load_results(dir):
                 header = json.loads(firstline[1:])
                 df = pandas.read_csv(fh, index_col=None)
                 headers.append(header)
-            elif fname.endswith('json'): # Deprecated json format
+            elif fname.endswith('json'):  # Deprecated json format
                 episodes = []
                 lines = fh.readlines()
                 header = json.loads(lines[0])
@@ -166,5 +171,5 @@ def load_results(dir):
     df.sort_values('t', inplace=True)
     df.reset_index(inplace=True)
     df['t'] -= min(header['t_start'] for header in headers)
-    df.headers = headers # HACK to preserve backwards compatibility
+    df.headers = headers  # HACK to preserve backwards compatibility
     return df

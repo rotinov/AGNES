@@ -42,11 +42,12 @@ class SubprocVecEnv(VecEnv):
     VecEnv that runs multiple environments in parallel in subproceses and communicates with them via pipes.
     Recommended to use when num_envs > 1 and step() can be a bottleneck.
     """
-    def __init__(self, env_fns, spaces=None, context='spawn', in_series=1):
+    def __init__(self, env_fns, spaces=None, context='spawn', in_series=1, odd_param=1):
         """
         Arguments:
 
-        env_fns: iterable of callables -  functions that create environments to run in subprocesses. Need to be cloud-pickleable
+        env_fns: iterable of callables -  functions that create environments to run in subprocesses.
+                                            Need to be cloud-pickleable
         in_series: number of environments to run in series in a single process
         (e.g. when len(env_fns) == 12 and in_series == 3, it will run 4 processes, each running 3 envs in series)
         """
@@ -78,7 +79,7 @@ class SubprocVecEnv(VecEnv):
         actions = np.array_split(actions, self.nremotes)
         for remote, action in zip(self.remotes, actions):
             if isinstance(self.action_space, spaces.Box) and self.action_space.shape[0] == 1:
-               action = np.expand_dims(action, axis=0)
+                action = np.expand_dims(action, axis=0)
 
             remote.send(('step', action))
         self.waiting = True
@@ -124,6 +125,7 @@ class SubprocVecEnv(VecEnv):
         if not self.closed:
             self.close()
 
+
 def _flatten_obs(obs):
     assert isinstance(obs, (list, tuple))
     assert len(obs) > 0
@@ -134,9 +136,10 @@ def _flatten_obs(obs):
     else:
         return np.stack(obs)
 
-def _flatten_list(l):
-    assert isinstance(l, (list, tuple))
-    assert len(l) > 0
-    assert all([len(l_) > 0 for l_ in l])
 
-    return [l__ for l_ in l for l__ in l_]
+def _flatten_list(lst):
+    assert isinstance(lst, (list, tuple))
+    assert len(lst) > 0
+    assert all([len(l_) > 0 for l_ in lst])
+
+    return [l__ for l_ in lst for l__ in l_]

@@ -26,7 +26,7 @@ setuptools.setup(name='agnes',
                  description='AGNES - Flexible Reinforcement Learning Framework with PyTorch',
                  author='Rotinov Egor',
                  url='https://github.com/rotinov/AGNES',
-                 version='0.0.6',
+                 version='0.0.7',
                  classifiers=[
                      "Programming Language :: Python :: 3",
                      "License :: OSI Approved :: MIT License",
@@ -34,7 +34,9 @@ setuptools.setup(name='agnes',
                  ]
                  )
 
+
 import pkg_resources
+
 tf_pkg = None
 for tf_pkg_name in ['torch']:
     try:

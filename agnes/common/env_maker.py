@@ -1,11 +1,13 @@
-import gym
-import re
-from collections import defaultdict
 import multiprocessing
+import re
+import typing
+from collections import defaultdict
 
-from agnes.common.envs_prep import wrap_deepmind, make_atari, SubprocVecEnv, DummyVecEnv, VecFrameStack, VecNormalize
+import gym
+
 from agnes.common.envs_prep import Monitor
-
+from agnes.common.envs_prep import wrap_deepmind, make_atari, SubprocVecEnv, DummyVecEnv, VecFrameStack, VecNormalize
+from agnes.common.envs_prep.vec_env import VecEnv
 
 _game_envs = defaultdict(set)
 for env in gym.envs.registry.all():
@@ -13,33 +15,55 @@ for env in gym.envs.registry.all():
     _game_envs[env_type].add(env.id)
 
 
-def make_vec_env(env, envs_num=multiprocessing.cpu_count(), config: dict = None):
+def make_vec_env(env_id: str or typing.Callable,
+                 envs_num: int = multiprocessing.cpu_count(),
+                 config: typing.Dict = None) -> typing.Dict[str, VecEnv or str or int]:
+    r"""
+    Function for initializing environments in a suitable for runners way.
+    Args:
+        env_id (str or Callable): environment id from gym(what should be provided in gym.make(env_id)
+                                    or if the environment is custom, callable which will return initialized environment
+                                    (every call it should be initialized newly).
+        envs_num (int): how many environments should be initialized in VecEnv object.
+        config (dict): config parameters for environment.
+
+    Returns:
+        envs (VecEnv): VecEnv object with initialized environments.
+        env_type (str): type of environment identified by gym.
+        num_envs (int): how many environments initialized in VecEnv object.
+    """
     if config is not None and "path" in config:
         if config["path"][-1] != '/':
             config["path"] = config["path"] + '/'
 
-    if isinstance(env, str):
-        env_type, env_id = get_env_type(env)
+    if isinstance(env_id, str):
+        env_type, env_id = get_env_type(env_id)
 
         if env_type == 'atari':
             envs, num_envs = wrap_vec_atari(env_id, envs_num=envs_num, config=config)
         else:
             envs, num_envs = wrap_vec_gym(env_id, envs_num=envs_num, config=config)
     else:
-        envs, num_envs = wrap_vec_custom(env, envs_num=envs_num, config=config)
+        envs, num_envs = wrap_vec_custom(env_id, envs_num=envs_num, config=config)
         env_type = 'custom'
+        env_id = str(env_id).split(" ")[0].replace("<", "")
 
     if env_type == 'mujoco':
         envs = VecNormalize(envs)
 
-    return envs, env_type, num_envs
+    return {
+        "env": envs,
+        "env_type": env_type,
+        "env_num": num_envs,
+        "env_name": str(env_id)
+    }
 
 
-def make_env(env, config: dict = None):
+def make_env(env: str or typing.Callable, config: typing.Dict = None) -> typing.Dict[str, VecEnv or str or int]:
     return make_vec_env(env, envs_num=1, config=config)
 
 
-def get_env_type(env: str):
+def get_env_type(env: str) -> typing.Tuple[str, str]:
     env_id = env
 
     # Re-parse the gym registry, since we could have new envs since last time.
@@ -58,12 +82,12 @@ def get_env_type(env: str):
                 break
         if ':' in env_id:
             env_type = re.sub(r':.*', '', env_id)
-        assert env_type is not None, 'env_id {} is not recognized in env types {}'.format(env_id, _game_envs.keys())
+        assert env_type is not None, 'env_id {} is not recognized in env_id types {}'.format(env_id, _game_envs.keys())
 
     return env_type, env_id
 
 
-def wrap_vec_atari(env_name, envs_num=multiprocessing.cpu_count(), config=None):
+def wrap_vec_atari(env_name, envs_num=multiprocessing.cpu_count(), config=None) -> typing.Tuple[VecEnv, int]:
     config_default = {"frame_stack": True,
                       "path": None
                       }
@@ -76,7 +100,10 @@ def wrap_vec_atari(env_name, envs_num=multiprocessing.cpu_count(), config=None):
 
     def make_env(i):
         def _thunk():
-            env = wrap_deepmind(Monitor(make_atari(env_name, max_episode_steps=100000), filename=config["path"], rank=i, allow_early_resets=False))
+            env = wrap_deepmind(
+                Monitor(make_atari(env_name, max_episode_steps=100000),
+                        filename=config["path"], rank=i, allow_early_resets=False)
+            )
             return env
 
         return _thunk
@@ -94,7 +121,7 @@ def wrap_vec_atari(env_name, envs_num=multiprocessing.cpu_count(), config=None):
     return envs, envs_num
 
 
-def wrap_vec_gym(env_name, envs_num=multiprocessing.cpu_count(), config=None):
+def wrap_vec_gym(env_name, envs_num=multiprocessing.cpu_count(), config=None) -> typing.Tuple[VecEnv, int]:
     if config is None:
         config = {"path": None}
 
@@ -114,7 +141,7 @@ def wrap_vec_gym(env_name, envs_num=multiprocessing.cpu_count(), config=None):
     return envs, envs_num
 
 
-def wrap_vec_custom(env_init_fun, envs_num=multiprocessing.cpu_count(), config=None):
+def wrap_vec_custom(env_init_fun, envs_num=multiprocessing.cpu_count(), config=None) -> typing.Tuple[VecEnv, int]:
     if config is None:
         config = {"path": None}
 

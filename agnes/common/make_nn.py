@@ -1,21 +1,29 @@
-import torch.nn as nn
-import torch
 import numpy
+import torch
+import torch.nn as nn
 
 
-def make_fc(x, y, num_layers=1, hidden_size=64, activation=nn.Tanh, activate_last=False):
+def make_fc(x: int, y: int,
+            num_layers=1, hidden_size=64,
+            activation=nn.Tanh, activate_last=False, layer_norm=False) -> nn.Sequential:
     if num_layers == 1:
         modules = [nn.Linear(x, y)]
     else:
         modules = [nn.Linear(x, hidden_size)]
         for i in range(1, num_layers-1):
+            if layer_norm:
+                modules.append(nn.LayerNorm(hidden_size))
             modules.append(activation())
             modules.append(nn.Linear(hidden_size, hidden_size))
 
+        if layer_norm:
+            modules.append(nn.LayerNorm(hidden_size))
         modules.append(activation())
         modules.append(nn.Linear(hidden_size, y))
 
     if activate_last:
+        if layer_norm:
+            modules.append(nn.LayerNorm(y))
         modules.append(activation())
 
     return nn.Sequential(*modules)

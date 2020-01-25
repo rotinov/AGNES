@@ -1,15 +1,19 @@
-import time
-from torch.utils.tensorboard import SummaryWriter
-import numpy
 import os
 import os.path as osp
+import time
+import typing
+import abc
+import errno
+
+import numpy
+from torch.utils.tensorboard import SummaryWriter
 
 
 def safemean(xs):
     return numpy.nan if len(xs) == 0 else numpy.mean(xs)
 
 
-def explained_variance(ypred, y):
+def explained_variance(ypred: numpy.ndarray, y: numpy.ndarray):
     """
     Computes fraction of variance that ypred explains about y.
     Returns 1 - Var[y-ypred] / Var[y]
@@ -18,19 +22,48 @@ def explained_variance(ypred, y):
         ev=1  =>  perfect prediction
         ev<0  =>  worse than just predicting zero
     """
-    assert y.ndim == 1 and ypred.ndim == 1
+    assert y.shape == ypred.shape, "Shapes are different"
+    y = y.reshape(-1)
+    ypred = ypred.reshape(-1)
     vary = numpy.var(y)
     return numpy.nan if vary == 0 else 1 - numpy.var(y-ypred) / vary
 
 
-class StandardLogger:
+class _BaseLogger(abc.ABC):
+    folder_name = ""
+    log_path = ""
+
+    def __call__(self, kvpairs, nupdates) -> None:
+        pass
+
+    def info(self, kvpairs: typing.Dict) -> None:
+        self.folder_name = osp.join("_".join([
+            kvpairs.get("env_name"),
+            kvpairs.get("NN type")
+        ]),
+            kvpairs.get("algo"),
+            str(time.strftime("%Y_%m_%dT%H_%M_%S", time.gmtime())))
+
+    def _create_dirs(self):
+        if not osp.isdir(self.log_path):
+            try:
+                os.makedirs(self.log_path)
+            except OSError as exc:
+                if exc.errno != errno.EEXIST:
+                    raise
+
+    def close(self) -> None:
+        pass
+
+
+class StandardLogger(_BaseLogger):
     def __init__(self):
         pass
 
-    def info(self, kvpairs):
+    def info(self, kvpairs) -> None:
         pass
 
-    def __call__(self, kvpairs, nupdates):
+    def __call__(self, kvpairs, nupdates) -> None:
         key2str = {}
         for (key, val) in sorted(kvpairs.items()):
             if isinstance(val, float):
@@ -64,55 +97,80 @@ class StandardLogger:
         maxlen = 30
         return s[:maxlen - 3] + '...' if len(s) > maxlen else s
 
+    def close(self) -> None:
+        return
+
 
 log = StandardLogger()
 
 
-class TensorboardLogger:
+class TensorboardLogger(_BaseLogger):
     first = True
+    writer = None
+    folder_name = ""
 
-    def __init__(self, path=".logs/"+str(time.time())):
-        self.path = path
+    def __init__(self,
+                 root_dir: str = ".logs"):
+        self.root_dir = root_dir
 
-    def info(self, kvpairs):
+    def open(self):
         if self.first:
-            self.writer = SummaryWriter(log_dir=self.path)
+            self.log_path = osp.join(self.root_dir, self.folder_name)
+            self._create_dirs()
+
+            filename = osp.join(self.log_path, 'tensorboard')
+
+            self.writer = SummaryWriter(log_dir=filename)
             self.first = False
+
+    def info(self, kvpairs: typing.Dict) -> None:
+        super().info(kvpairs)
+
+        self.open()
 
         for (key, val) in sorted(kvpairs.items()):
             self.writer.add_text(key, str(val), 0)
 
-    def __call__(self, kvpairs, nupdates):
-
-        if self.first:
-            self.writer = SummaryWriter(log_dir=self.path)
-            self.first = False
+    def __call__(self, kvpairs: typing.Dict, nupdates: int) -> None:
+        self.open()
 
         for (key, val) in sorted(kvpairs.items()):
             self.writer.add_scalar(key, val, nupdates)
 
-        # self.writer.flush()
+        self.last_nupdate = nupdates
 
     def __del__(self):
-        pass
+        self.close()
 
-
-class CsvLogger:
-    def __init__(self, filename):
-        if not osp.isdir(filename):
+    def close(self) -> None:
+        if self.writer is not None:
             try:
-                os.makedirs(os.path.dirname(filename))
-            except OSError as exc:
-                if exc.errno != errno.EEXIST:
-                    raise
+                self.writer.close()
+            except Exception as e:
+                pass
 
-        filename = osp.join(filename, 'progress.csv')
 
-        self.file = open(filename, 'w+t')
+class CsvLogger(_BaseLogger):
+    file = None
+    folder_name = ""
+    log_path = ""
+
+    def __init__(self, root_dir: str):
+
+        self.root_dir = root_dir
+
         self.keys = []
         self.sep = ','
 
-    def __call__(self, kvs, nupdates):
+    def __call__(self, kvs: typing.Dict, nupdates: int) -> None:
+        if self.file is None:
+            self.log_path = osp.join(self.root_dir, self.folder_name)
+
+            self._create_dirs()
+
+            filename = osp.join(self.log_path, 'progress.csv')
+            self.file = open(filename, 'w+t')
+
         # Add our current row to the history
         extra_keys = list(kvs.keys() - self.keys)
         extra_keys.sort()
@@ -139,40 +197,50 @@ class CsvLogger:
         self.file.write('\n')
         self.file.flush()
 
-    def close(self):
+    def close(self) -> None:
         self.file.close()
-
-    def info(self, kvpairs):
-        pass
 
     def __del__(self):
         pass
 
 
-class ListLogger:
-    def __init__(self, args=[]):
+class ListLogger(_BaseLogger):
+    loggers = None
+
+    def __init__(self, *args):
+        first_std_logger = False
+        for item in args:
+            if isinstance(item, StandardLogger):
+                assert not first_std_logger, "You can't make more than one StandardLogger."
+                first_std_logger = True
+
         self.loggers = args
 
-    def info(self, kvpairs):
+    def info(self, kvpairs: typing.Dict) -> None:
         for logger in self.loggers:
             logger.info(kvpairs)
 
-    def __call__(self, kvpairs, nupdates):
+    def __call__(self, kvpairs: typing.Dict, nupdates: int, print_out: bool = True) -> None:
         for logger in self.loggers:
-            logger(kvpairs, nupdates)
+            if (isinstance(logger, StandardLogger) and print_out) or not isinstance(logger, StandardLogger):
+                logger(kvpairs, nupdates)
 
-    def stepping_environment(self):
+    def stepping_environment(self) -> None:
         for logger in self.loggers:
             if isinstance(logger, StandardLogger):
                 print("Stepping environment...")
                 return
 
-    def done(self):
+    def done(self) -> None:
         for logger in self.loggers:
             if isinstance(logger, StandardLogger):
                 print("Done.")
                 return
 
     def __del__(self):
-        if len(self.loggers) != 0:
-            del self.loggers
+        self.close()
+
+    def close(self) -> None:
+        if self.loggers is not None:
+            for logger in self.loggers:
+                logger.close()

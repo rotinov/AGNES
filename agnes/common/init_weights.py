@@ -48,7 +48,8 @@ def get_weights_init(activation='tanh'):
         elif isinstance(m, nn.Linear):
             nn.init.orthogonal_(m.weight.data, gain)
             # nn.init.normal_(m.bias.data)
-            nn.init.zeros_(m.bias.data)
+            if m.bias is not None:
+                nn.init.zeros_(m.bias.data)
         elif isinstance(m, nn.LSTM):
             for param in m.parameters():
                 if len(param.shape) >= 2:

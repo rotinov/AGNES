@@ -1,5 +1,4 @@
 import agnes
-import time
 
 
 def test_config():

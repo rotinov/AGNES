@@ -39,21 +39,22 @@ class LinearSchedule:
 
 
 class Saver:
-    filename = None
-    frames_period = None
-    _counter = 0
-    _active = False
+    filename: str = None
+    frames_period: int = None
+    _counter: int = 0
+    _active: bool = False
 
-    def __init__(self, filename=None, frames_period=None):
+    def __init__(self, filename: str = None, frames_period: int = None):
         if filename is not None:
             self.filename = filename
             self.frames_period = frames_period
             self._active = True
 
-    def save(self, algo: _BaseAlgo, frames_now):
+    def save(self, algo: _BaseAlgo, frames_now: int):
         if not self._active:
             return
 
-        if (self.frames_period * self._counter - frames_now) < self.frames_period:
-            algo.save(self.filename)
+        if 0 <= (self.frames_period * self._counter - frames_now) < self.frames_period:
+            if self._counter != 0:
+                algo.save(self.filename)
             self._counter += 1

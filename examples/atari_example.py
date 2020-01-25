@@ -8,5 +8,5 @@ if __name__ == '__main__':
     envs = agnes.make_vec_env(env_name, envs_num=4)
 
     runner = agnes.Single(envs, agnes.PPO, agnes.CNN)
-    runner.log(agnes.TensorboardLogger(".logs/"+str(time.time())), agnes.log)
+    runner.log(agnes.TensorboardLogger(), agnes.log)
     runner.run()

@@ -1,6 +1,7 @@
 from agnes.nns import mlp, cnn, rnn, base
 from gym import spaces
 from abc import ABC
+import warnings
 
 
 class _BaseChooser(ABC):
@@ -12,14 +13,14 @@ class _BaseChooser(ABC):
     def config(self, *args):
         return self
 
-    def __call__(self, observation_space: spaces.Space, action_space: spaces.Space) -> base._BasePolicy:
+    def __call__(self, observation_space: spaces.Space, action_space: spaces.Space, **network_args) -> base._BasePolicy:
         pass
 
 
 class MLPChooser(_BaseChooser):
     meta = "MLP"
 
-    def __call__(self, observation_space: spaces.Space, action_space: spaces.Space):
+    def __call__(self, observation_space: spaces.Space, action_space: spaces.Space, **network_args) -> base._BasePolicy:
         if len(observation_space.shape) == 3:
             warnings.warn("Looks like you're using MLP for images. CNN is recommended.")
 
@@ -37,7 +38,7 @@ class CNNChooser(_BaseChooser):
     value_nn = None
     nn = cnn.CNNDiscreteShared
 
-    def config(self, shared=True, policy_nn=None, value_nn=None):
+    def config(self, shared: bool = True, policy_nn=None, value_nn=None):
         if shared:
             if policy_nn is not None or value_nn is not None:
                 raise NameError('Shared network with custom layers is not supported for now.')
@@ -49,7 +50,7 @@ class CNNChooser(_BaseChooser):
             self.value_nn = value_nn
         return self
 
-    def __call__(self, observation_space: spaces.Space, action_space: spaces.Space):
+    def __call__(self, observation_space: spaces.Space, action_space: spaces.Space, **network_args) -> base._BasePolicy:
         if isinstance(action_space, spaces.Box):
             raise NameError('Continuous environments are not supported yet.')
 
@@ -62,7 +63,7 @@ class CNNChooser(_BaseChooser):
 class RNNinit(_BaseChooser):
     meta = "RNN"
 
-    def __call__(self, observation_space: spaces.Space, action_space: spaces.Space):
+    def __call__(self, observation_space: spaces.Space, action_space: spaces.Space, **network_args) -> base._BasePolicy:
         if isinstance(action_space, spaces.Box):
             return rnn.RNNContinuous(observation_space, action_space)
         else:
@@ -73,18 +74,18 @@ class RNNCNNinitializer(_BaseChooser):
     meta = "RNN-CNN"
     gru = False
 
-    def config(self, gru):
+    def config(self, gru: bool):
         self.gru = gru
         return self
 
-    def __call__(self, observation_space: spaces.Space, action_space: spaces.Space):
+    def __call__(self, observation_space: spaces.Space, action_space: spaces.Space, **network_args) -> base._BasePolicy:
         return rnn.RNNCNNDiscrete(observation_space, action_space, gru=self.gru)
 
 
 class LSTMCNNinitializer(_BaseChooser):
     meta = "LSTM-CNN"
 
-    def __call__(self, observation_space: spaces.Space, action_space: spaces.Space):
+    def __call__(self, observation_space: spaces.Space, action_space: spaces.Space, **network_args) -> base._BasePolicy:
         return rnn.LSTMCNNDiscrete(observation_space, action_space)
 
 

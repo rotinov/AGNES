@@ -14,7 +14,7 @@ class VisualizeAttention:
     def __init__(self, env, runner, prerun=0, seconds=20, layer_num=0):
         self.nnet = runner.trainer.get_nn_instance()
 
-        self.env = env[0]
+        self.env = env['env']
         self.state = self.env.reset()
         self.hidden = None
         with torch.no_grad():
@@ -129,10 +129,12 @@ class VisualizeAttention:
 env_name = "BreakoutNoFrameskip-v4"
 
 env = agnes.make_env(env_name, config={"frame_stack": True})
-config, _ = agnes.PPO.get_config(env[1])
+config, _ = agnes.PPO.get_config(env["env_type"])
 
 runner = agnes.Single(env, agnes.PPO, agnes.LSTMCNN, config=config)
 
 runner.trainer.load("results/Atari-BreakoutNoFrameskip-v4-PPO-10M/Breakout.pth")
 
 VisualizeAttention(env, runner, seconds=60, layer_num=1).run()
+
+print("Done!")

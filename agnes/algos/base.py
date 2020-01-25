@@ -1,5 +1,8 @@
 import torch
+import numpy
 import abc
+
+from typing import *
 
 torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = True
@@ -25,16 +28,25 @@ class _BaseAlgo(abc.ABC):
 
     meta = "BASE"
 
+    _trainer: bool = True
+    _device: torch.device = torch.device("cpu")
+
     @abc.abstractmethod
     def __init__(self, *args):
         pass
 
-    def __call__(self, state, done):
+    def __call__(self, state: numpy.ndarray, done: numpy.ndarray):
         with torch.no_grad():
             if self._device == torch.device('cpu'):
-                return self._nnet.get_action(torch.FloatTensor(state), torch.FloatTensor(done))
+                return self._nnet.get_action(
+                    torch.from_numpy(numpy.asarray(state, dtype=numpy.float32)),
+                    torch.from_numpy(numpy.asarray(done))
+                )
             else:
-                return self._nnet.get_action(torch.cuda.FloatTensor(state), torch.cuda.FloatTensor(done))
+                return self._nnet.get_action(
+                    torch.from_numpy(numpy.asarray(state, dtype=numpy.float32)).to(self._device),
+                    torch.from_numpy(numpy.asarray(done)).to(self._device)
+                )
 
     def reset(self):
         self._nnet.reset()
@@ -42,37 +54,49 @@ class _BaseAlgo(abc.ABC):
     def update(self, from_agent):
         assert not self._trainer
 
-        self._nnet.load_state_dict(from_agent._nnet.state_dict())
+        self.load_state_dict(from_agent.get_state_dict())
 
         return True
 
-    def get_state_dict(self):
+    def is_trainer(self) -> bool:
+        return self._trainer
+
+    def get_state_dict(self) -> Dict[str, dict]:
         assert self._trainer
-        return self._nnet.state_dict()
+        return {
+            "nnet": self._nnet.state_dict(),
+            "optimizer": self._optimizer.state_dict()
+        }
 
-    def load_state_dict(self, state_dict):
-        return self._nnet.load_state_dict(state_dict)
+    def load_state_dict(self, state_dict: Dict[str, dict] or dict) -> tuple:
+        if state_dict.get("optimizer") is None:
+            return self._nnet.load_state_dict(state_dict)
+        info = []
+        if state_dict.get("optimizer") and hasattr(self, "_optimizer"):
+            info.append(self._optimizer.load_state_dict(state_dict["optimizer"]))
+        return (self._nnet.load_state_dict(state_dict["nnet"]),
+                *info)
 
-    def save(self, filename):
-        torch.save(self._nnet.state_dict(), filename)
+    def save(self, filename: str):
+        torch.save(self.get_state_dict(), filename)
 
-    def load(self, filename):
-        self._nnet.load_state_dict(torch.load(filename))
+    def load(self, filename: str):
+        self.load_state_dict(torch.load(filename))
 
     def get_nn_instance(self):
-        assert self._trainer
+        assert self.is_trainer(), "Is not a trainer."
         return self._nnet
 
-    def experience(self, transition):
+    def experience(self, transition: dict) -> list or None:
         pass
 
-    def train(self, data):
+    def train(self, data: Dict[str, list] or None) -> list:
         pass
 
     def to(self, device):
         return self
 
-    def device_info(self):
+    def device_info(self) -> str:
         if self._device.type == 'cuda':
             return torch.cuda.get_device_name(device=self._device)
         else:

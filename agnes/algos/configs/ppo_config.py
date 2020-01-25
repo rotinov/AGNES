@@ -1,4 +1,3 @@
-import re
 from typing import Dict, Tuple
 
 
@@ -11,10 +10,11 @@ def atari_config() -> Dict:
         lam=0.95,
         noptepochs=4,
         max_grad_norm=0.5,
-        learning_rate=2.5e-4,
+        learning_rate=lambda x: 2.5e-4*x,
         cliprange=lambda x: x*0.1,
         vf_coef=0.5,
-        ent_coef=0.01
+        ent_coef=0.01,
+        bptt=16
     )
 
 
@@ -27,10 +27,11 @@ def mujoco_config() -> Dict:
         lam=0.95,
         noptepochs=10,
         max_grad_norm=0.5,
-        learning_rate=3e-4,
+        learning_rate=lambda x: 3e-4*x,
         cliprange=0.2,
         vf_coef=0.5,
-        ent_coef=0.0
+        ent_coef=0.0,
+        bptt=8
     )
 
 

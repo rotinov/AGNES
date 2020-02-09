@@ -22,7 +22,7 @@ class Buffer(_BaseBuffer):
 
     def append(self, transition: Dict[str, numpy.ndarray]):
         for key in transition.keys():
-            lnk_to_arr = transition[key]
+            lnk_to_arr = numpy.asarray(transition[key])
             if self.first:
                 self.rollouts[key] = numpy.empty((self.nsteps,) + lnk_to_arr.shape, dtype=lnk_to_arr.dtype)
             self.rollouts[key][self.offset] = lnk_to_arr

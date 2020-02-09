@@ -3,6 +3,7 @@
 **Status:** This framework is under active development and bugs may occur.
 
 [![Build status](https://travis-ci.org/rotinov/AGNES.svg?branch=master)](https://travis-ci.org/rotinov/AGNES)
+![Upload Python Package](https://github.com/rotinov/AGNES/workflows/Upload%20Python%20Package/badge.svg?branch=master)
 
 ## Results
 #### MuJoCo

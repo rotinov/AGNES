@@ -11,8 +11,8 @@ from agnes.runners.base_runner import BaseRunner
 
 
 class Single(BaseRunner):
-    """"Single" runner releases learning with a single worker that is also a trainer.
-    "Single" runner is compatible with vector environments(config or env_type should be specified manually).
+    """"Single" runner releases learning with a single worker and a trainer.
+    "Single" runner is compatible with vector environments(config or env_type can be specified manually).
     """
 
     def __init__(self, env, algo, nn: _BaseChooser, config: typing.Dict = None, all_cuda: bool = False, **network_args):

@@ -28,9 +28,10 @@ def make_vec_env(env_id: str or typing.Callable,
         config (dict): config parameters for environment.
 
     Returns:
-        envs (VecEnv): VecEnv object with initialized environments.
+        env (VecEnv): VecEnv object with initialized environments.
         env_type (str): type of environment identified by gym.
-        num_envs (int): how many environments initialized in VecEnv object.
+        env_num (int): how many environments initialized in VecEnv object.
+        env_name (str): name of environment (like for gym.make initialization) or class name if it is custom.
     """
     if config is not None and "path" in config:
         if config["path"][-1] != '/':

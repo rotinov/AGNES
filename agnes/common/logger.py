@@ -110,7 +110,7 @@ class TensorboardLogger(_BaseLogger):
     folder_name = ""
 
     def __init__(self,
-                 root_dir: str = ".logs"):
+                 root_dir: str = ".logs/"):
         self.root_dir = root_dir
 
     def open(self):
@@ -155,7 +155,7 @@ class CsvLogger(_BaseLogger):
     folder_name = ""
     log_path = ""
 
-    def __init__(self, root_dir: str):
+    def __init__(self, root_dir: str = ".logs/"):
 
         self.root_dir = root_dir
 

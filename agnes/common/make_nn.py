@@ -266,7 +266,7 @@ class CnnHead(nn.Module):
                           activate_last=activate_last, activation=nn.ReLU)
 
     def forward(self, cv):
-        return self.fc(cv.view(-1, self.cnn_out_size))
+        return self.fc(cv.contiguous().view(-1, self.cnn_out_size))
 
 
 class Cnn(nn.Module):

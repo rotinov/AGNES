@@ -47,9 +47,7 @@ class PpoRndClass(PpoClass):
         self.rnd_nnets_cuda = self._device.type == 'cuda'
         return self
 
-    def _calculate_advantages(self, data: List[Dict[str, list]]):
-        assert all(k in data[0] for k in ("state", "action", "new_state", "reward",
-                                          "done", "old_log_probs", "old_vals")), "Necessary keys are not in the dict!"
+    def _calculate_advantages(self, train_dict: Dict[str, numpy.ndarray]):
         # transition = {
         #     "state": self.state,
         #     "action": pred_action,
@@ -59,8 +57,6 @@ class PpoRndClass(PpoClass):
         #     "old_log_probs": old_log_probs,
         #     "old_vals": old_vals
         # }
-
-        train_dict = {k: numpy.asarray([dic[k] for dic in data]) for k in data[0]}
 
         n_shape = train_dict["done"].shape
 

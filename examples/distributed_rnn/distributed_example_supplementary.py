@@ -9,10 +9,9 @@ if __name__ == '__main__':
 
     runner = agnes.DistributedMPI(envs, agnes.PPO, agnes.LSTMCNN)
     runner.save_every("Temporary_Breakout.pth", int(1e5))
-    runner.log(agnes.log, agnes.TensorboardLogger())
+    runner.log(agnes.CsvLogger(".logs/"), agnes.TensorboardLogger())
     runner.run()
 
-    if runner.is_trainer():
-        runner.trainer.save("Breakout.pth")
+    runner.save("Breakout.pth")
 
     del runner

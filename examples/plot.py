@@ -1,5 +1,6 @@
 import os
 from matplotlib import pyplot as plt
+import matplotlib
 
 import pandas
 import numpy
@@ -75,6 +76,18 @@ def symmetric_ema(xolds, yolds, low=None, high=None, n=512, decay_steps=1., low_
     return xs, ys, count_ys
 
 
+def mypause(interval):
+    backend = plt.rcParams['backend']
+    if backend in matplotlib.rcsetup.interactive_bk:
+        figManager = matplotlib._pylab_helpers.Gcf.get_active()
+        if figManager is not None:
+            canvas = figManager.canvas
+            if canvas.figure.stale:
+                canvas.draw()
+            canvas.start_event_loop(interval)
+            return
+
+
 def plot_one(axis, root_dir, color=(0.1, 0.7, 0.9, 1.0), shaded_err=True, shaded_std=True, print_out=True):
     all_sub_dirs = next(os.walk(root_dir))[1]
     if print_out:
@@ -86,7 +99,10 @@ def plot_one(axis, root_dir, color=(0.1, 0.7, 0.9, 1.0), shaded_err=True, shaded
         fname = os.path.join(root_dir, sub_dir, "progress.csv")
         if not os.path.exists(fname):
             continue
-        dataframe = pandas.read_csv(fname, index_col=None, comment='#')
+        try:
+            dataframe = pandas.read_csv(fname, index_col=None, comment='#')
+        except:
+            return
 
         item_steps = numpy.asarray(dataframe['misc/serial_timesteps'])
         item_rewards = numpy.asarray(dataframe['eprewmean'])
@@ -127,6 +143,8 @@ def plot_all(path, shaded_err: bool = True, shaded_std: bool = True, redraw: boo
         plt.ion()
 
     fig, axes = plt.subplots(1, 1, num=title)
+    fig.canvas.set_window_title('Performance')
+    plt.show(block=False)
 
     if redraw:
         date = -1
@@ -138,7 +156,7 @@ def plot_all(path, shaded_err: bool = True, shaded_std: bool = True, redraw: boo
                     date_new = max(os.stat(os.path.join(root, name)).st_mtime, date_new)
 
             if date == date_new:
-                plt.pause(1)
+                mypause(1)
                 continue
 
             date = date_new
@@ -163,7 +181,7 @@ def plot_all(path, shaded_err: bool = True, shaded_std: bool = True, redraw: boo
             plt.ylabel("Reward")
             fig.tight_layout()
 
-            plt.pause(1)
+            mypause(1)
     else:
         axis = plt.gca()
 

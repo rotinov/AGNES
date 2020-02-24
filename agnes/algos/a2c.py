@@ -14,29 +14,34 @@ from agnes.nns.initializer import _BaseChooser
 
 
 class Buffer(_BaseBuffer):
+    __slots__ = ["_rollouts", "_offset", "_first"]
+
+    _rollouts: Dict[str, numpy.ndarray]
+    _offset: int
+    _first: bool
+
     def __init__(self, nsteps):
         super().__init__(nsteps)
-        self.rollouts = dict()
-        self.offset = 0
-        self.first = True
+        self._rollouts: Dict[str, numpy.ndarray] = dict()
+        self._offset = 0
+        self._first = True
 
     def append(self, transition: Dict[str, numpy.ndarray]):
         for key in transition.keys():
             lnk_to_arr = numpy.asarray(transition[key])
-            if self.first:
-                self.rollouts[key] = numpy.empty((self.nsteps,) + lnk_to_arr.shape, dtype=lnk_to_arr.dtype)
-            self.rollouts[key][self.offset] = lnk_to_arr
+            if self._first:
+                self._rollouts[key] = numpy.empty((self.nsteps,) + lnk_to_arr.shape, dtype=lnk_to_arr.dtype)
+            self._rollouts[key][self._offset] = lnk_to_arr
 
-        self.offset += 1
-        self.first = False
+        self._offset += 1
+        self._first = False
 
-    def rollout(self):
-        transitions = [dict(zip(self.rollouts, t)) for t in zip(*self.rollouts.values())]
-        self.offset = 0
-        return list(transitions)
+    def rollout(self) -> Dict[str, numpy.ndarray]:
+        self._offset = 0
+        return self._rollouts
 
-    def __len__(self):
-        return self.offset
+    def __len__(self) -> int:
+        return self._offset
 
 
 class A2CLoss(torch.nn.Module):
@@ -164,11 +169,7 @@ class A2cClass(_BaseAlgo):
     def experience(self, transition):
         self._buffer.append(transition)
         if len(self._buffer) >= self.nsteps:
-            data = self._buffer.rollout()
-
-            data = self._calculate_advantages(data)
-
-            return data
+            return self._calculate_advantages(self._buffer.rollout())
         return None
 
     def device_info(self) -> str:
@@ -189,10 +190,8 @@ class A2cClass(_BaseAlgo):
 
         return self
 
-    def _calculate_advantages(self, data: List[Dict[str, list]]):
-        assert all(k in data[0] for k in ("state", "action", "new_state", "reward",
-                                          "done", "old_log_probs", "old_vals")), "Necessary keys are not in the dict!"
-        # transition = {
+    def _calculate_advantages(self, train_dict: Dict[str, numpy.ndarray]):
+        # train_dict = {
         #     "state": self.state,
         #     "action": pred_action,
         #     "new_state": nstate,
@@ -201,8 +200,6 @@ class A2cClass(_BaseAlgo):
         #     "old_log_probs": old_log_probs,
         #     "old_vals": old_vals
         # }
-
-        train_dict = {k: numpy.asarray([dic[k] for dic in data]) for k in data[0]}
 
         n_shape = train_dict["done"].shape
 
@@ -308,15 +305,6 @@ class A2cClass(_BaseAlgo):
 
         # Getting log probs
         t_new_log_probs = t_distrib.log_prob(data["action"]).view_as(data["old_log_probs"])
-
-        tensors_dict = {
-            "new_log_probs": t_new_log_probs,
-            "old_log_probs": data["old_log_probs"],
-            "advantages": data["advantages"],
-            "new_vals": t_state_vals,
-            "returns": data["returns"],
-            "entropies": t_entropies
-        }
 
         tensors_storage = LossArgs()
 

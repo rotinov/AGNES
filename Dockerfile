@@ -14,7 +14,7 @@ WORKDIR $CODE_DIR/AGNES
 RUN rm -rf __pycache__ && \
     find . -name "*.pyc" -delete && \
     pip install opencv-python && \
-    pip install mpi4py && \
+    pip install mpi4py Tensorboard && \
     pip install -r requirements.txt && \
     pip install .
 

@@ -43,7 +43,7 @@ class ImagePreprocess(nn.Module):
         if self.swap_axis:
             x = x.permute(0, 3, 1, 2)
 
-        return x
+        return x.contiguous()
 
 
 class CnnBody(nn.Module):

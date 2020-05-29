@@ -4,9 +4,10 @@ import time
 import typing
 import abc
 import errno
+import importlib
+import json
 
 import numpy
-from torch.utils.tensorboard import SummaryWriter
 
 
 def safemean(xs):
@@ -112,6 +113,10 @@ class TensorboardLogger(_BaseLogger):
     def __init__(self,
                  root_dir: str = ".logs/"):
         self.root_dir = root_dir
+        try:
+            self._SummaryWriter = importlib.import_module("torch.utils.tensorboard").SummaryWriter
+        except ImportError:
+            raise ImportError("To use TensorboardLogger please install Tensorboard>=2.0.0")
 
     def open(self):
         if self.first:
@@ -120,7 +125,7 @@ class TensorboardLogger(_BaseLogger):
 
             filename = osp.join(self.log_path, 'tensorboard')
 
-            self.writer = SummaryWriter(log_dir=filename)
+            self.writer = self._SummaryWriter(log_dir=filename)
             self.first = False
 
     def info(self, kvpairs: typing.Dict) -> None:
@@ -152,8 +157,8 @@ class TensorboardLogger(_BaseLogger):
 
 class CsvLogger(_BaseLogger):
     file = None
-    folder_name = ""
-    log_path = ""
+    folder_name: str
+    log_path: str
 
     def __init__(self, root_dir: str = ".logs/"):
 
@@ -162,15 +167,21 @@ class CsvLogger(_BaseLogger):
         self.keys = []
         self.sep = ','
 
-    def __call__(self, kvs: typing.Dict, nupdates: int) -> None:
+    def info(self, kvpairs: dict or None = None) -> None:
+        super().info(kvpairs)
+
         if self.file is None:
             self.log_path = osp.join(self.root_dir, self.folder_name)
-
             self._create_dirs()
+            filename = osp.join(self.log_path, 'info.json')
+            with open(filename, 'w+t') as info_file:
+                json.dump(kvpairs or dict(), info_file)
 
             filename = osp.join(self.log_path, 'progress.csv')
             self.file = open(filename, 'w+t')
 
+    def __call__(self, kvs: typing.Dict, nupdates: int) -> None:
+        assert self.file is not None, "Call info first"
         # Add our current row to the history
         extra_keys = list(kvs.keys() - self.keys)
         extra_keys.sort()

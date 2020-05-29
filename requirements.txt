@@ -1,10 +1,8 @@
 cloudpickle
-gym
 gym[atari]
 psutil
 atari-py
 atari_py
-Tensorboard
 numpy
 torch>=1.2
 opencv-python

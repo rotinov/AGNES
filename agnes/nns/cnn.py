@@ -23,20 +23,22 @@ class CNNDiscreteCopy(_CnnFamily):
         if policy_cnn is None:
             self.actor_head = make_nn.Cnn(input_shape, self.actions_n, body=make_nn.CnnImpalaShallowBody)
         else:
-            self.actor_head = policy_cnn(self.actions_n)
+            self.actor_head = policy_cnn(input_shape, self.actions_n)
 
         # critic's layer
         if value_cnn is None:
             self.critic_head = make_nn.Cnn(input_shape, 1, body=make_nn.CnnImpalaShallowBody)
         else:
-            self.critic_head = value_cnn(1)
+            self.critic_head = value_cnn(input_shape, 1)
 
         self.actor_head.conv.apply(get_weights_init('relu'))
 
         self.critic_head.conv.apply(get_weights_init('relu'))
 
-        self.actor_head[-1].apply(get_weights_init(0.01))
-        self.critic_head[-1].apply(get_weights_init(0.01))
+        if policy_cnn is None:
+            self.actor_head[-1].apply(get_weights_init(0.01))
+        if value_cnn is None:
+            self.critic_head[-1].apply(get_weights_init(0.01))
 
     def wrap_dist(self, vec) -> torch.distributions.Categorical:
         dist = Categorical(logits=vec)

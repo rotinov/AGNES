@@ -2,6 +2,7 @@ import agnes.common.tests as test_pack
 
 
 if __name__ == '__main__':
+    print("Testing is started...")
     test_pack.MLP_Discrete.test_single()
     test_pack.MLP_Continuous.test_single()
     test_pack.MLP_Continuous.test_vec()

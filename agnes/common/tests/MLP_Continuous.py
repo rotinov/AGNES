@@ -21,6 +21,7 @@ def test_single():
     env = agnes.make_env('Pendulum-v0')
 
     runner = agnes.Single(env, agnes.PPO, agnes.MLP, config=test_config())
+    runner.log(agnes.CsvLogger())
     runner.run()
 
 

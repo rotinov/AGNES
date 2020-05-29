@@ -47,7 +47,7 @@ def make_vec_env(env_id: str or typing.Callable,
     else:
         envs, num_envs = wrap_vec_custom(env_id, envs_num=envs_num, config=config)
         env_type = 'custom'
-        env_id = str(env_id).split(" ")[0].replace("<", "")
+        env_id = str(env_id).split(" ")[-1][1:-2].replace("_", "-").replace(".", "-")
 
     if env_type == 'mujoco':
         envs = VecNormalize(envs)
@@ -147,7 +147,7 @@ def wrap_vec_custom(env_init_fun, envs_num=multiprocessing.cpu_count(), config=N
         config = {"path": None}
 
     def make_env(i):
-        return Monitor(env_init_fun, filename=config["path"], rank=i, allow_early_resets=True)
+        return lambda : Monitor(env_init_fun(), filename=config["path"], rank=i, allow_early_resets=True)
 
     envs = [make_env(i) for i in range(envs_num)]
 

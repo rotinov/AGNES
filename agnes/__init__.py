@@ -2,7 +2,7 @@ from agnes.algos import A2C, PPO, PPORND
 
 from agnes.nns import MLP, CNN, RNN, RNNCNN, GRUCNN, LSTMCNN
 
-from agnes.runners import Single, DistributedMPI
+from agnes.runners import Single, DistributedMPI, CompetitiveRunner
 
 from agnes.common import TensorboardLogger, StandardLogger, CsvLogger, log
 

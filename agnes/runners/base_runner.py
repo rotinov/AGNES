@@ -1,13 +1,14 @@
 import abc
-from typing import Dict
+from typing import Dict, List, Deque
+import datetime
 
 import numpy
-from gym.core import Env
 
 from agnes.algos.base import _BaseAlgo
 from agnes.common import logger
 from agnes.common.schedules import Saver
 from agnes.nns.initializer import _BaseChooser
+from agnes.common.envs_prep import DummyVecEnv
 
 
 class BaseRunner(abc.ABC):
@@ -16,7 +17,7 @@ class BaseRunner(abc.ABC):
     workers_num = 1
     trainer: _BaseAlgo
     worker: _BaseAlgo
-    env: Env
+    env: DummyVecEnv
 
     state: numpy.ndarray
     done: numpy.ndarray
@@ -54,7 +55,8 @@ class BaseRunner(abc.ABC):
                 "env_type": self.env_type,
                 "NN type": self.nn_name,
                 "algo": self.trainer.meta,
-                "env_name": self.env_id
+                "env_name": self.env_id,
+                "config": self.cnfg
             })
 
     def run(self, log_interval: int = 1):
@@ -68,19 +70,27 @@ class BaseRunner(abc.ABC):
         if self.is_trainer():
             self.trainer.save(filename)
 
-    def _one_log(self, lr_things, epinfobuf, nbatch, tfirststart, tstart, tnow, nupdates, stepping_to_learning=None,
-                 print_out=True):
+    def _one_log(self,
+                 lr_things: List[dict],
+                 epinfobuf: Deque[dict],
+                 nbatch: int,
+                 tfirststart: float,
+                 tstart: float, tnow: float, nupdates: int,
+                 stepping_to_learning: float = None,
+                 print_out: bool = True):
 
         train_dict = {k: logger.safemean([dic[k] for dic in lr_things]) for k in lr_things[0]}
+        etc = (tnow - tfirststart) * (self.timesteps / (self.nsteps * nupdates) - 1.)
 
         kvpairs = {
             "eplenmean": logger.safemean(numpy.asarray([epinfo['l'] for epinfo in epinfobuf]).reshape(-1)),
             "eprewmean": logger.safemean(numpy.asarray([epinfo['r'] for epinfo in epinfobuf]).reshape(-1)),
-            "fps": int(nbatch / (tnow - tstart)),
+            "fps": int(nbatch / (tnow - tstart + 1e-20)),
             "misc/nupdates": nupdates,
             "misc/serial_timesteps": self.nsteps * nupdates,
-            "misc/time_elapsed": (tnow - tfirststart),
-            "misc/total_timesteps": self.nsteps * nupdates * self.workers_num * self.vec_num
+            "misc/time_elapsed": str(datetime.timedelta(seconds=round(tnow - tfirststart))),
+            "misc/total_timesteps": self.nsteps * nupdates * self.workers_num * self.vec_num,
+            "misc/etc": str(datetime.timedelta(seconds=round(etc)))
         }
 
         kvpairs.update(train_dict)

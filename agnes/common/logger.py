@@ -140,7 +140,8 @@ class TensorboardLogger(_BaseLogger):
         self.open()
 
         for (key, val) in sorted(kvpairs.items()):
-            self.writer.add_scalar(key, val, nupdates)
+            if not isinstance(val, str):
+                self.writer.add_scalar(key, val, nupdates)
 
         self.last_nupdate = nupdates
 

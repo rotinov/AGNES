@@ -98,7 +98,7 @@ class _BaseAlgo(abc.ABC):
         torch.save(self.get_state_dict(), filename)
 
     def load(self, filename: str):
-        self.load_state_dict(torch.load(filename))
+        self.load_state_dict(torch.load(filename, map_location=self._device))
 
     def get_nn_instance(self):
         assert self.is_trainer(), "Is not a trainer."

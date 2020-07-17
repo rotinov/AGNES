@@ -66,6 +66,8 @@ class Single(BaseRunner):
             
             self.worker.update(self.trainer)
 
+            self.saver.save(self.trainer, nupdates*self.nsteps)
+
             tnow = time.perf_counter()
 
             self._one_log(lr_things, epinfobuf, nbatch, tfirststart, tstart, tnow, nupdates,

@@ -54,7 +54,7 @@ class Saver:
         if not self._active:
             return
 
-        if 0 <= (self.frames_period * self._counter - frames_now) < self.frames_period:
+        if self.frames_period * self._counter < frames_now:
             if self._counter != 0:
                 algo.save(self.filename)
             self._counter += 1

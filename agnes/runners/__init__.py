@@ -1,4 +1,5 @@
 from agnes.runners.single import Single
+from agnes.runners.competitive_single import CompetitiveRunner
 
 try:
     from agnes.runners.distributed_mpi import DistributedMPI
@@ -9,4 +10,4 @@ except ImportError:
                   "'pip install mpi4py' or '"
                   "pip install agnes[distributed]'")
 
-    Distributed = None
+    DistributedMPI = None

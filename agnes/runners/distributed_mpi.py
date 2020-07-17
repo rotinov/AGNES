@@ -98,7 +98,7 @@ class DistributedMPI(BaseRunner):
             self.saver.save(self.trainer, self.nsteps*nupdates)
 
             self._one_log(lr_things, epinfobuf, nbatch, tfirststart, tstart, tnow, nupdates,
-                          numpy.mean(stepping_to_learning), print_out=nupdates % log_interval == 0)
+                          float(numpy.mean(stepping_to_learning)), print_out=nupdates % log_interval == 0)
 
         MPI.Finalize()
 
